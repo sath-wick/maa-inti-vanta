@@ -38,6 +38,11 @@ const [deliveryDate, setDeliveryDate] = useState(format(new Date(), "yyyy-MMMM-d
     onAuthStateChanged(auth, (u) => setUser(u));
   }, []);
 
+  const copyToClipboard = (text) => {
+  navigator.clipboard.writeText(text);
+  };
+
+
   const addItem = (meal, value) => {
     const [sub, name] = value.split("::");
     const itemObj = inventory[meal]?.[sub]?.find(i => i.name === name);
@@ -126,7 +131,7 @@ const [deliveryDate, setDeliveryDate] = useState(format(new Date(), "yyyy-MMMM-d
   };
 
   const englishMsg =
-    `🍽️ *Our cooked meal, just for you!*\n\n` +
+    `🍽️ *Maa Inti Vanta - just for you*\n\n` +
     `Please select the items you'd like to receive.\n📅 *Delivery Date:*\n ${deliveryDay}` +
     formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "10:00PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
     formatEnglishSection("🍚", "Lunch", selected.lunch, "08:00AM", deliveryDay) +
@@ -163,10 +168,10 @@ const [deliveryDate, setDeliveryDate] = useState(format(new Date(), "yyyy-MMMM-d
     await set(invRef, copy);
     setInventory(copy);
     setShowEditor(false);
-    alert("✅ Changes saved successfully!");
+
   };
 
-  if (!user) return <Login onSuccess={() => alert("✅ Logged in successfully!")} />;
+  if (!user) return <Login />;
 
   return (
     <div className="p-6 space-y-4">
@@ -269,13 +274,26 @@ const [deliveryDate, setDeliveryDate] = useState(format(new Date(), "yyyy-MMMM-d
           <div>
             <Label>English</Label>
             <Textarea value={generatedMsg} rows={16} readOnly />
+            <Button
+              className="mt-2"
+              onClick={() => copyToClipboard(generatedMsg)}
+            >
+              📋 Copy English
+            </Button>
           </div>
           <div>
             <Label>Telugu</Label>
             <Textarea value={generatedTeluguMsg} rows={16} readOnly />
+            <Button
+              className="mt-2"
+              onClick={() => copyToClipboard(generatedTeluguMsg)}
+            >
+              📋 Copy Telugu
+            </Button>
           </div>
         </div>
       )}
+
 
       <Dialog open={showEditor} onOpenChange={setShowEditor}>
         <DialogContent>
@@ -319,7 +337,6 @@ const [deliveryDate, setDeliveryDate] = useState(format(new Date(), "yyyy-MMMM-d
                     </div>
                   ))
                 )}
-                <Button onClick={() => addNestedItem("breakfast", "")}>➕ Add Item</Button>
               </TabsContent>
             ))}
           </Tabs>

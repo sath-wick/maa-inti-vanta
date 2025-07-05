@@ -2,14 +2,13 @@ import { useState } from "react";
 import { auth } from "./firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 
-export default function Login({ onSuccess }) {
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const login = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      onSuccess?.();
     } catch (err) {
       alert("❌ Login failed. Check your credentials.");
       console.error(err);
