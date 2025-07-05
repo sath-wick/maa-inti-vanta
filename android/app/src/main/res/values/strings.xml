@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">maa-inti-vanta</string>
+    <string name="title_activity_main">maa-inti-vanta</string>
+    <string name="package_name">com.maaintivanta.app</string>
+    <string name="custom_url_scheme">com.maaintivanta.app</string>
+</resources>

@@ -1,0 +1,37 @@
+select {
+  background-color: #1f2937; /* dark gray */
+  color: #f3f4f6; /* light text */
+}
+
+option {
+  background-color: #111827; /* darker gray */
+}
+
+input[type="date"],
+input[type="time"],
+input[type="text"],
+textarea {
+  background-color: #1f2937;
+  color: #f3f4f6;
+  border: 1px solid #374151;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+label {
+  color: #e5e7eb;
+}
+
+.card {
+  background-color: #111827;
+  border: 1px solid #374151;
+}
+
+.tag {
+  background-color: #2563eb;
+  color: white;
+}
