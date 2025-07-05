@@ -16,8 +16,7 @@ import Login from "./Login";
 export default function MenuCreator() {
   const [inventory, setInventory] = useState({ breakfast: [], lunch: {}, dinner: {} });
   const [selected, setSelected] = useState({ breakfast: [], lunch: {}, dinner: {} });
-  const [deliveryDate, setDeliveryDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [deadlines, setDeadlines] = useState({ breakfast: "08:00", lunch: "10:00", dinner: "16:00" });
+const [deliveryDate, setDeliveryDate] = useState(format(new Date(), "yyyy-MMMM-dd"));
   const [generatedMsg, setGeneratedMsg] = useState("");
   const [generatedTeluguMsg, setGeneratedTeluguMsg] = useState("");
   const [showEditor, setShowEditor] = useState(false);
@@ -95,43 +94,60 @@ export default function MenuCreator() {
   };
 
   const generateMessage = () => {
-    const today = format(new Date(deliveryDate), "dd/MM/yyyy");
-    const to12Hour = (time24) => {
-      const [hour, minute] = time24.split(":");
-      const date = new Date();
-      date.setHours(parseInt(hour), parseInt(minute));
-      return format(date, "hh:mm a");
-    };
+  const deliveryDay = format(new Date(deliveryDate), "dd/MMMM/yyyy");
 
-    const formatSection = (emoji, title, items, deadline) =>
-      `\n${emoji} *${title}*\n${Object.entries(items).map(([sub, arr]) =>
-        arr.map(i => `- ${i.name}`).join("\n")
-      ).join("\n") || "- No items selected"}\n🕒 *Respond by:* ${to12Hour(deadline)} – ${today}\n━━━━━━━━━━━━━━━`;
-
-    const formatTeluguSection = (emoji, title, items, deadline) =>
-      `\n${emoji} *${title}*\n${Object.entries(items).map(([sub, arr]) =>
-        arr.map(i => `- ${i.telugu}`).join("\n")
-      ).join("\n") || "- ఎంపిక చేయలేదు"}\n🕒 *చివరి సమయం:* ${to12Hour(deadline)} – ${today}\n━━━━━━━━━━━━━━━`;
-
-    const englishMsg =
-      `🍽️ *Our cooked meal, just for you!*\n\n` +
-      `Please select the items you'd like to receive today.  \n📅 *Delivery Date:* ${today}` +
-      formatSection("🌞", "Breakfast Menu", { breakfast: selected.breakfast }, deadlines.breakfast) +
-      formatSection("🍚", "Lunch Menu", selected.lunch, deadlines.lunch) +
-      formatSection("🌙", "Dinner Menu", selected.dinner, deadlines.dinner) +
-      `\n\nDelivery Timings:\n🌞Breakfast : 09:00AM\n🍚Lunch : 01:00PM\n🌙Dinner: 07:00PM\n📦 Your food will be delivered accordingly. Thank you!`;
-
-    const teluguMsg =
-      `🍲 మీ కోసం – *మా ఇంటి వంట*!\n` +
-      `దయచేసి మీకు కావాల్సిన వంటలు ఎంచుకోండి.\n📅 *డెలివరీ తేదీ:* ${today}` +
-      formatTeluguSection("🌞", "తిఫిన్", { breakfast: selected.breakfast }, deadlines.breakfast) +
-      formatTeluguSection("🍚", "మధ్యాహ్న భోజనం", selected.lunch, deadlines.lunch) +
-      formatTeluguSection("🌙", "రాత్రి భోజనం", selected.dinner, deadlines.dinner) +
-      `\n\n🚚 *డెలివరీ సమయం:* 12:00 PM – 01:30 PM\nధన్యవాదాలు!`;
-
-    setGeneratedMsg(englishMsg);
-    setGeneratedTeluguMsg(teluguMsg);
+  const to12Hour = (time24) => {
+    const [hour, minute] = time24.split(":");
+    const date = new Date();
+    date.setHours(parseInt(hour), parseInt(minute));
+    return format(date, "hh:mm a");
   };
+
+  const formatEnglishSection = (emoji, title, items, deadline, dateLabel) => {
+    const lines = Object.entries(items)
+      .map(([sub, arr]) =>
+        arr.map(i =>
+          `- ${i.name}${i.price ? ` - ₹${i.price}` : ""}`
+        ).join("\n")
+      ).join("\n") || "- No items selected";
+
+    return `\n${emoji} *${title}*\n${lines}\n\n🕒 *Order by:*\n ${to12Hour(deadline)} – ${dateLabel}\n━━━━━━━━━━━━━━━`;
+  };
+
+  const formatTeluguSection = (emoji, title, items, deadline, dateLabel) => {
+    const lines = Object.entries(items)
+      .map(([sub, arr]) =>
+        arr.map(i =>
+          `- ${i.telugu || i.name}${i.price ? ` - ₹${i.price}` : ""}`
+        ).join("\n")
+      ).join("\n") || "- ఎంపిక చేయలేదు";
+
+    return `\n${emoji} ${title}\n${lines}\n\n🕒 *ఆర్డర్ గడువు:*\n ${to12Hour(deadline)} – ${dateLabel}\n━━━━━━━━━━━━━━━\n`;
+  };
+
+  const englishMsg =
+    `🍽️ *Our cooked meal, just for you!*\n\n` +
+    `Please select the items you'd like to receive.\n📅 *Delivery Date:*\n ${deliveryDay}` +
+    formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "10:00PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
+    formatEnglishSection("🍚", "Lunch", selected.lunch, "08:00AM", deliveryDay) +
+    formatEnglishSection("🌙", "Dinner", selected.dinner, "03:00PM", deliveryDay) +
+    `\n\n🚚 *Delivery Timings:*\n🌞Breakfast: 08:30 - 09:30 AM\n🍚Lunch: 12:30 - 01:30 PM\n🌙Dinner: 07:30 - 08:30 PM\n\n` +
+    `📦 *Delivery Charges:*\nWithin 3 Km – ₹30\n3 Km to 6 Km – ₹60\n\nThank you!`;
+
+  const teluguMsg =
+    `🍲 మీ కోసం – *మా ఇంటి వంట!*\n\n` +
+    `దయచేసి మీకు కావాల్సిన వంటలు ఎంచుకోండి.\n\n📅 *డెలివరీ తేదీ:*\n *${deliveryDay}*\n` +
+    formatTeluguSection("🌞", "*టిఫిన్*", { breakfast: selected.breakfast },  "10:00PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
+    formatTeluguSection("🍚", "*మధ్యాహ్న భోజనం*", selected.lunch, "08:00AM", deliveryDay) +
+    formatTeluguSection("🌙", "*రాత్రి భోజనం*", selected.dinner, "03:00PM", deliveryDay) +
+    `\n\n🚚 *డెలివరీ సమయం*:\n🌞టిఫిన్: 08:30 - 09:30 AM\n🍚మధ్యాహ్న భోజనం: 12:30 - 01:30 PM\n🌙రాత్రి భోజనం: 07:30 - 08:30 PM\n\n` +
+    `*డెలివరి ఛార్జ్ (3 Km లోపు): ₹30 రూపాయలు*.\n*డెలివరి ఛార్జ్ (3 Km - 6 Km): ₹60 రూపాయలు*\n\n` +
+    `ధన్యవాదాలు`;
+
+  setGeneratedMsg(englishMsg);
+  setGeneratedTeluguMsg(teluguMsg);
+};
+
 
   const saveToFirebase = async () => {
     if (!auth.currentUser) {
@@ -235,14 +251,6 @@ export default function MenuCreator() {
 
                 </>
               )}
-              <div>
-                <Label>Response Deadline</Label>
-                <Input
-                  type="time"
-                  value={deadlines[meal]}
-                  onChange={e => setDeadlines({ ...deadlines, [meal]: e.target.value })}
-                />
-              </div>
             </CardContent>
           </Card>
         ))}
@@ -296,13 +304,22 @@ export default function MenuCreator() {
                   ))
                 ) : (
                   (editableInventory.breakfast ?? []).map((item, idx) => (
-                    <div key={idx} className="flex gap-2">
-                      <Input value={item.name} onChange={e => updateNestedItem("breakfast", "", idx, "name", e.target.value)} placeholder="English" />
-                      <Input value={item.telugu} onChange={e => updateNestedItem("breakfast", "", idx, "telugu", e.target.value)} placeholder="తెలుగు" />
+                    <div key={idx} className="flex gap-2 mb-2">
+                      <Input
+                        value={item.name}
+                        onChange={e => updateNestedItem("breakfast", "", idx, "name", e.target.value)}
+                        placeholder="English"
+                      />
+                      <Input
+                        value={item.telugu}
+                        onChange={e => updateNestedItem("breakfast", "", idx, "telugu", e.target.value)}
+                        placeholder="తెలుగు"
+                      />
                       <Button variant="destructive" onClick={() => deleteNestedItem("breakfast", "", idx)}>❌</Button>
                     </div>
                   ))
                 )}
+                <Button onClick={() => addNestedItem("breakfast", "")}>➕ Add Item</Button>
               </TabsContent>
             ))}
           </Tabs>
