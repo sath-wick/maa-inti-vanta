@@ -139,7 +139,7 @@ export default function MenuCreator() {
             `- ${i.name}${i.price ? ` - ₹${i.price}` : ""}`
           ).join("\n")
         ).join("\n") || "- No items selected";
-      return `\n${emoji} *${title}*\n${lines}\n\n🕒 *Order by:*\n ${to12Hour(deadline)} – ${dateLabel}\n━━━━━━━━━━━━━━━`;
+      return `\n${emoji} *${title}*\n${lines}\n\n🕒 *Order by:*\n ${deadline} – ${dateLabel}\n━━━━━━━━━━━━━━━`;
     };
     const formatTeluguSection = (emoji, title, items, deadline, dateLabel) => {
       const lines = Object.entries(items)
@@ -148,23 +148,23 @@ export default function MenuCreator() {
             `- ${i.telugu || i.name}${i.price ? ` - ₹${i.price}` : ""}`
           ).join("\n")
         ).join("\n") || "- ఎంపిక చేయలేదు";
-      return `\n${emoji} ${title}\n${lines}\n\n🕒 *ఆర్డర్ గడువు:*\n ${to12Hour(deadline)} – ${dateLabel}\n━━━━━━━━━━━━━━━\n`;
+      return `\n${emoji} ${title}\n${lines}\n\n🕒 *ఆర్డర్ గడువు:*\n ${deadline} – ${dateLabel}\n━━━━━━━━━━━━━━━\n`;
     };
     const englishMsg =
       `🍽️ *Maa Inti Vanta - just for you*\n\n` +
       `Please select the items you'd like to receive.\n📅 *Delivery Date:*\n ${deliveryDay}` +
-      formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "10:00PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
-      formatEnglishSection("🍚", "Lunch", selected.lunch, "08:00AM", deliveryDay) +
-      formatEnglishSection("🌙", "Dinner", selected.dinner, "03:00PM", deliveryDay) +
-      `\n\n🚚 *Delivery Timings:*\n🌞Breakfast: 08:30 - 09:30 AM\n🍚Lunch: 12:30 - 01:30 PM\n🌙Dinner: 07:30 - 08:30 PM\n\n` +
+      formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "10:00 PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
+      formatEnglishSection("🍚", "Lunch", selected.lunch, "08:00 AM", deliveryDay) +
+      formatEnglishSection("🌙", "Dinner", selected.dinner, "03:00 PM", deliveryDay) +
+      `\n\n🚚 *Delivery Timings:*\n🌞Breakfast: 08:30 - 09:30 AM\n🍚Lunch: 12:30 - 01:30 PM\n🌙Dinner: 08:00 - 09:00 PM\n\n` +
       `📦 *Delivery Charges:*\nWithin 3 Km – ₹30\n3 Km to 6 Km – ₹60\n\nThank you!`;
     const teluguMsg =
       `🍲 మీ కోసం – *మా ఇంటి వంట!*\n\n` +
       `దయచేసి మీకు కావాల్సిన వంటలు ఎంచుకోండి.\n\n📅 *డెలివరీ తేదీ:*\n *${deliveryDay}*\n` +
-      formatTeluguSection("🌞", "*టిఫిన్*", { breakfast: selected.breakfast }, "10:00PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
+      formatTeluguSection("🌞", "*టిఫిన్*", { breakfast: selected.breakfast }, "10:00 PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
       formatTeluguSection("🍚", "*మధ్యాహ్న భోజనం*", selected.lunch, "08:00AM", deliveryDay) +
       formatTeluguSection("🌙", "*రాత్రి భోజనం*", selected.dinner, "03:00PM", deliveryDay) +
-      `\n\n🚚 *డెలివరీ సమయం*:\n🌞టిఫిన్: 08:30 - 09:30 AM\n🍚మధ్యాహ్న భోజనం: 12:30 - 01:30 PM\n🌙రాత్రి భోజనం: 07:30 - 08:30 PM\n\n` +
+      `\n\n🚚 *డెలివరీ సమయం*:\n🌞టిఫిన్: 08:30 - 09:30 AM\n🍚మధ్యాహ్న భోజనం: 12:30 - 01:30 PM\n🌙రాత్రి భోజనం: 08:00 - 09:00 PM\n\n` +
       `*డెలివరి ఛార్జ్ (3 Km లోపు): ₹30 రూపాయలు*.\n*డెలివరి ఛార్జ్ (3 Km - 6 Km): ₹60 రూపాయలు*\n\n` +
       `ధన్యవాదాలు`;
     setGeneratedMsg(englishMsg);
