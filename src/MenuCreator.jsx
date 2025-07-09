@@ -156,7 +156,7 @@ export default function MenuCreator() {
       formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "10:00 PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
       formatEnglishSection("🍚", "Lunch", selected.lunch, "08:00 AM", deliveryDay) +
       formatEnglishSection("🌙", "Dinner", selected.dinner, "03:00 PM", deliveryDay) +
-      `\n\n🚚 *Delivery Timings:*\n🌞Breakfast: 08:30 - 09:30 AM\n🍚Lunch: 12:30 - 01:30 PM\n🌙Dinner: 08:00 - 09:00 PM\n\n` +
+      `\n\n🚚 *Delivery Timings:*\n🌞Breakfast: 07:30 - 08:30 AM\n🍚Lunch: 12:30 - 01:30 PM\n🌙Dinner: 08:00 - 09:00 PM\n\n` +
       `📦 *Delivery Charges:*\nWithin 3 Km – ₹30\n3 Km to 6 Km – ₹60\n\nThank you!`;
     const teluguMsg =
       `🍲 మీ కోసం – *మా ఇంటి వంట!*\n\n` +

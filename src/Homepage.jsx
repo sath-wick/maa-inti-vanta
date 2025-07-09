@@ -6,6 +6,7 @@ import Login from "./Login";
 import MenuCreator from "./MenuCreator";
 import CustomerManager from "./CustomerManager";
 import Billing from './Billing'
+import CustomerHistory from "./CustomerHistory";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
@@ -24,6 +25,14 @@ function Homepage() {
             </CardContent>
           </Card>
         </Link>
+        <Link to="/billing" className="block">
+          <Card className="transition-transform hover:scale-105 shadow-lg cursor-pointer">
+            <CardContent className="flex flex-col items-center p-8">
+              <span className="text-5xl mb-4">📜</span>
+              <span className="text-2xl font-semibold">Billing</span>
+            </CardContent>
+          </Card>
+        </Link>
         <Link to="/customers" className="block">
           <Card className="transition-transform hover:scale-105 shadow-lg cursor-pointer">
             <CardContent className="flex flex-col items-center p-8">
@@ -32,11 +41,11 @@ function Homepage() {
             </CardContent>
           </Card>
         </Link>
-        <Link to="/billing" className="block">
+        <Link to="/customer-history" className="block">
           <Card className="transition-transform hover:scale-105 shadow-lg cursor-pointer">
             <CardContent className="flex flex-col items-center p-8">
-              <span className="text-5xl mb-4">📜</span>
-              <span className="text-2xl font-semibold">Billing</span>
+              <span className="text-5xl mb-4">⌚</span>
+              <span className="text-2xl font-semibold">Customer Order History</span>
             </CardContent>
           </Card>
         </Link>
@@ -68,6 +77,7 @@ export default function App() {
       <Route path="/menu-creator" element={<MenuCreator />} />
       <Route path="/customers" element={<CustomerManager />} />
       <Route path="/billing" element={<Billing />} />
+      <Route path="/customer-history" element={<CustomerHistory />} />
     </Routes>
   );
 }

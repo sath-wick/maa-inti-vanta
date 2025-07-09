@@ -9,7 +9,23 @@ import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
 import { format } from "date-fns";
 
-// Copy-to-clipboard button for dashboards
+// Persistent state hook using localStorage
+function usePersistentState(key, initialValue) {
+  const [state, setState] = React.useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  React.useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(state));
+  }, [key, state]);
+  return [state, setState];
+}
+
+// Copy-to-clipboard button
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
@@ -21,7 +37,7 @@ function CopyButton({ text }) {
   };
   return (
     <button
-      className="ml-2 px-3 py-1 rounded bg-blue-600 text-white text-xs"
+      className="ml-2 px-3 py-1 rounded bg-blue-800 text-gray-100 text-xs"
       onClick={handleCopy}
       type="button"
     >
@@ -44,8 +60,8 @@ function MultiSelectWithPills({ label, items, selected, setSelected }) {
     setSelected(selected.map(i => i.name === name ? { ...i, quantity: qty } : i));
   return (
     <div className="mb-2">
-      <Label className="text-white">{label}</Label>
-      <select className="w-full mt-1 p-3 rounded bg-[rgba(0,0,0,0.3)] text-white text-base" onChange={handleSelect} value="">
+      <Label className="text-gray-200">{label}</Label>
+      <select className="w-full mt-1 p-3 rounded bg-[#23272f] text-gray-100 text-base" onChange={handleSelect} value="">
         <option value="">-- Select --</option>
         {items.map(i => (
           <option key={i.name} value={i.name}>{i.name}</option>
@@ -53,14 +69,14 @@ function MultiSelectWithPills({ label, items, selected, setSelected }) {
       </select>
       <div className="flex flex-wrap gap-2 mt-2">
         {selected.map(i => (
-          <div key={i.name} className="flex items-center bg-gray-700 text-white rounded-full px-3 py-1">
+          <div key={i.name} className="flex items-center bg-[#323844] text-gray-100 rounded-full px-3 py-1">
             <span>{i.name}</span>
             <input
               type="number"
               min={0}
               value={i.quantity}
               onChange={e => handleQuantity(i.name, Number(e.target.value))}
-              className="mx-2 w-12 bg-gray-800 text-white rounded"
+              className="mx-2 w-12 bg-[#23272f] text-gray-100 rounded"
             />
             <button onClick={() => handleRemove(i.name)} className="ml-1 text-red-300 text-lg">×</button>
           </div>
@@ -71,7 +87,10 @@ function MultiSelectWithPills({ label, items, selected, setSelected }) {
 }
 
 export default function BillingModule() {
-  // Initial states
+  // Persistent dashboards
+  const [cookingSession, setCookingSession] = usePersistentState("cookingDashboard", {});
+  const [packagingSession, setPackagingSession] = usePersistentState("packagingDashboard", {});
+
   const initialSelectedItems = {
     breakfast: [], curry: [], daal: [], pickle: [], sambar: [], others: []
   };
@@ -95,11 +114,8 @@ export default function BillingModule() {
   const [orderDate, setOrderDate] = useState(initialOrderDate);
   const [deliveryCharge, setDeliveryCharge] = useState(initialDeliveryCharge);
 
-  // Cumulative dashboards
-  const [cookingDashboard, setCookingDashboard] = useState([]); // [{itemName, quantity}]
-  const [packagingDashboard, setPackagingDashboard] = useState([]); // [{customerName, items:[{itemName, quantity}]}]
-  const [cookingMsg, setCookingMsg] = useState("");
-  const [packagingMsg, setPackagingMsg] = useState("");
+  // Real-time customer order history for selected date
+  const [customerOrders, setCustomerOrders] = useState([]);
 
   const billRef = useRef(null);
 
@@ -121,6 +137,25 @@ export default function BillingModule() {
       });
     });
   }, []);
+
+  // Fetch real-time order history for selected customer and date
+  useEffect(() => {
+    if (!selectedCustomer) {
+      setCustomerOrders([]);
+      return;
+    }
+    const ordersRef = ref(database, `customerOrderHistory/${selectedCustomer.id}/orders`);
+    const unsub = onValue(ordersRef, snap => {
+      const data = snap.val() || {};
+      const orders = Object.values(data);
+      setCustomerOrders(
+        orderDate
+          ? orders.filter(o => o.date === orderDate)
+          : orders
+      );
+    });
+    return () => unsub();
+  }, [selectedCustomer, orderDate]);
 
   // Customer creation
   const handleCreateCustomer = async () => {
@@ -156,33 +191,41 @@ export default function BillingModule() {
   const totalItemPrice = allSelected.reduce((sum, row) => sum + row.price * row.quantity, 0);
   const grandTotal = totalItemPrice + Number(deliveryCharge);
 
-  // Confirm order: update dashboards, download bill, clear selections
+  // Confirm order: update session dashboards and DB, then clear selections
   const handleConfirmOrder = async () => {
     if (!selectedCustomer) return alert("Select a customer");
-    // Update cooking dashboard (accumulate quantities for each item)
-    setCookingDashboard(prev => {
-      const updated = [...prev];
-      allSelected.forEach(row => {
-        const idx = updated.findIndex(item => item.itemName === row.name);
-        if (idx >= 0) {
-          updated[idx].quantity += row.quantity;
-        } else {
-          updated.push({ itemName: row.name, quantity: row.quantity });
-        }
-      });
-      return updated;
+    if (allSelected.length === 0) return alert("Select at least one item with quantity > 0");
+
+    // Store in DB
+    const orderData = {
+      date: orderDate,
+      items: allSelected.map(row => ({
+        name: row.name,
+        quantity: row.quantity,
+        price: row.price
+      })),
+      deliveryCharges: deliveryCharge,
+      grandTotal,
+      customerName: selectedCustomer.name
+    };
+    await push(ref(database, `customerOrderHistory/${selectedCustomer.id}/orders`), orderData);
+
+    // Update cooking session
+    const newCooking = { ...cookingSession };
+    allSelected.forEach(item => {
+      newCooking[item.name] = (newCooking[item.name] || 0) + item.quantity;
     });
-    // Update packaging dashboard (accumulate per customer)
-    setPackagingDashboard(prev => [
-      ...prev,
-      {
-        customerName: selectedCustomer.name,
-        items: allSelected.map(row => ({
-          itemName: row.name,
-          quantity: row.quantity
-        }))
-      }
-    ]);
+    setCookingSession(newCooking);
+
+    // Update packaging session
+    const newPackaging = { ...packagingSession };
+    if (!newPackaging[selectedCustomer.name]) newPackaging[selectedCustomer.name] = {};
+    allSelected.forEach(item => {
+      newPackaging[selectedCustomer.name][item.name] =
+        (newPackaging[selectedCustomer.name][item.name] || 0) + item.quantity;
+    });
+    setPackagingSession(newPackaging);
+
     // Download bill image (not displayed in UI)
     if (billRef.current) {
       const canvas = await html2canvas(billRef.current);
@@ -192,53 +235,45 @@ export default function BillingModule() {
       link.download = `bill_${selectedCustomer.name || "customer"}.png`;
       link.click();
     }
-    // Update the dashboard textareas after state update
-    setTimeout(updateDashboardTextareas, 0);
-    // Clear all selections
+
     setSelectedItems(initialSelectedItems);
     setDeliveryCharge(initialDeliveryCharge);
-    setOrderDate(initialOrderDate);
   };
 
-  // Update the dashboard textareas
-  const updateDashboardTextareas = () => {
-    // Cooking summary: accumulate total quantity per item
-    const cookingMap = {};
-    cookingDashboard.forEach(entry => {
-      cookingMap[entry.itemName] = (cookingMap[entry.itemName] || 0) + Number(entry.quantity);
-    });
-    allSelected.forEach(row => {
-      cookingMap[row.name] = (cookingMap[row.name] || 0) + Number(row.quantity);
-    });
-    const cookingText = Object.entries(cookingMap)
-      .map(([item, qty]) => `- ${item}: ${qty}`)
-      .join("\n");
-    setCookingMsg(cookingText);
-
-    // Packaging summary: list per customer
-    const allPackaging = [
-      ...packagingDashboard,
-      {
-        customerName: selectedCustomer?.name,
-        items: allSelected.map(row => ({ itemName: row.name, quantity: row.quantity }))
-      }
-    ];
-    const packagingText = allPackaging
-      .map(entry =>
-        `${entry.customerName}: ` +
-        entry.items.map(i => `${i.itemName} x${i.quantity}`).join(", ")
-      )
-      .join("\n");
-    setPackagingMsg(packagingText);
-  };
-
-  // Clear dashboards and textareas
+  // Clear all selections (for new order)
   const handleClearList = () => {
-    setCookingDashboard([]);
-    setPackagingDashboard([]);
-    setCookingMsg("");
-    setPackagingMsg("");
+    setSelectedItems(initialSelectedItems);
+    setDeliveryCharge(initialDeliveryCharge);
   };
+
+  // Clear dashboards (for new meal session)
+  const handleClearDashboards = () => {
+    setCookingSession({});
+    setPackagingSession({});
+  };
+
+  // Cooking dashboard textarea content
+  const cookingText = Object.entries(cookingSession)
+    .map(([item, qty]) => `${item}: ${qty}`)
+    .join("\n");
+
+  // Packaging dashboard textarea content
+  const packagingText = Object.entries(packagingSession)
+    .map(([customer, items]) =>
+      `${customer}:\n` +
+      Object.entries(items).map(([item, qty]) => `  ${item} x${qty}`).join("\n")
+    ).join("\n\n");
+
+  // Customer order history textarea content
+  const customerHistoryText =
+    customerOrders.length === 0
+      ? "No orders for this date."
+      : customerOrders.map(order =>
+          order.items.map(item =>
+            `${item.name} - ${item.quantity} - ₹${item.price * item.quantity}`
+          ).join("\n") +
+          `\nDelivery: ₹${order.deliveryCharges || 0}\nTotal: ₹${order.grandTotal || 0}\n`
+        ).join("\n---\n");
 
   // Filter customers for search
   const filteredCustomers = customers.filter(c =>
@@ -247,28 +282,28 @@ export default function BillingModule() {
   );
 
   return (
-    <div className="w-full max-w-xs mx-auto p-4 space-y-4 bg-[rgba(0,0,0,0.2)] rounded-lg">
+    <div className="w-full max-w-xs mx-auto p-4 space-y-4 bg-[#181c23] rounded-lg">
       {/* Create button at the top, small width */}
       <div className="flex justify-end mb-2">
         <Button
-          className="px-4 py-2 text-sm bg-green-700 text-white rounded"
+          className="px-4 py-2 text-sm bg-green-700 text-gray-100 rounded"
           style={{ minWidth: 80, maxWidth: 100 }}
           onClick={() => setShowCreateCustomer(true)}
         >
           Create
         </Button>
       </div>
-      <h2 className="text-xl font-bold mb-4 text-white text-center">Billing Module</h2>
-      <div className="flex flex-col gap-2 bg-[rgba(0,0,0,0.2)] rounded-lg p-4">
-        <Label className="text-white">Customer</Label>
+      <h2 className="text-xl font-bold mb-4 text-gray-100 text-center">Billing Module</h2>
+      <div className="flex flex-col gap-2 bg-[#23272f] rounded-lg p-4">
+        <Label className="text-gray-200">Customer</Label>
         <Input
           placeholder="Search customer"
           value={searchCustomer}
           onChange={e => setSearchCustomer(e.target.value)}
-          className="w-full mb-2 p-3 rounded bg-[rgba(0,0,0,0.3)] text-white text-base"
+          className="w-full mb-2 p-3 rounded bg-[#23272f] text-gray-100 text-base"
         />
         <select
-          className="w-full p-3 rounded bg-[rgba(0,0,0,0.3)] text-white text-base"
+          className="w-full p-3 rounded bg-[#23272f] text-gray-100 text-base"
           value={selectedCustomer?.id || ""}
           onChange={e => handleCustomerChange(e.target.value)}
         >
@@ -279,30 +314,30 @@ export default function BillingModule() {
         </select>
       </div>
       <div>
-        <Label className="text-white">Date</Label>
+        <Label className="text-gray-200">Date</Label>
         <Input
           type="date"
           value={orderDate}
           onChange={e => setOrderDate(e.target.value)}
-          className="w-full p-3 rounded bg-[rgba(0,0,0,0.3)] text-white text-base"
+          className="w-full p-3 rounded bg-[#23272f] text-gray-100 text-base"
         />
       </div>
       {showCreateCustomer && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/90 z-50">
-          <div className="bg-purple-900 rounded-lg p-4 w-full max-w-xs">
-            <h3 className="font-bold mb-2">Create Customer</h3>
-            <input placeholder="Name" value={newCustomer.name} onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })} className="w-full mb-2 p-2 border rounded" />
-            <input placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })} className="w-full mb-2 p-2 border rounded" />
+          <div className="bg-[#23272f] rounded-lg p-4 w-full max-w-xs">
+            <h3 className="font-bold mb-2 text-gray-100">Create Customer</h3>
+            <input placeholder="Name" value={newCustomer.name} onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })} className="w-full mb-2 p-2 border rounded bg-[#181c23] text-gray-100" />
+            <input placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })} className="w-full mb-2 p-2 border rounded bg-[#181c23] text-gray-100" />
             <div className="flex gap-2">
-            <Button className="w-full py-2 mb-2" onClick={handleCreateCustomer}>Create & Select</Button>
-            <Button className="w-full py-2" onClick={() => setShowCreateCustomer(false)}>Cancel</Button>
+              <Button className="w-full py-2 mb-2 bg-green-700 text-gray-100" onClick={handleCreateCustomer}>Create & Select</Button>
+              <Button className="w-full py-2 bg-gray-700 text-gray-100" onClick={() => setShowCreateCustomer(false)}>Cancel</Button>
             </div>
           </div>
         </div>
       )}
 
       {selectedCustomer && (
-        <Card className="bg-[rgba(0,0,0,0.2)]">
+        <Card className="bg-[#23272f]">
           <CardContent>
             <MultiSelectWithPills
               label="Breakfast"
@@ -341,15 +376,15 @@ export default function BillingModule() {
               setSelected={arr => setSelectedItems(s => ({ ...s, others: arr }))}
             />
 
-            <div className="flex flex-col gap-2 mt-6 bg-[rgba(0,0,0,0.2)] rounded-lg p-4">
-              <Label className="text-white">Delivery Charges</Label>
+            <div className="flex flex-col gap-2 mt-6 bg-[#181c23] rounded-lg p-4">
+              <Label className="text-gray-200">Delivery Charges</Label>
               <div className="flex flex-col gap-2 mt-2">
                 {[
                   { label: "No delivery", value: 0 },
                   { label: "Within 3km (+₹30)", value: 30 },
                   { label: "Beyond 3km (+₹60)", value: 60 }
                 ].map(opt => (
-                  <label key={opt.value} className="flex items-center gap-2 text-white">
+                  <label key={opt.value} className="flex items-center gap-2 text-gray-100">
                     <input
                       type="radio"
                       name="delivery"
@@ -361,7 +396,7 @@ export default function BillingModule() {
                   </label>
                 ))}
               </div>
-              <div className="text-right space-y-1 text-white mt-2">
+              <div className="text-right space-y-1 text-gray-100 mt-2">
                 <div>Total Item Price: <b>₹{totalItemPrice}</b></div>
                 <div>Delivery Charges: <b>₹{deliveryCharge}</b></div>
                 <div className="text-lg">Grand Total: <b>₹{grandTotal}</b></div>
@@ -375,15 +410,14 @@ export default function BillingModule() {
         <div className="mt-4">
           <div
             ref={billRef}
-            className="bg-white text-black rounded-lg shadow-lg p-4 max-w-xs mx-auto border font-mono text-xs"
+            className="bg-[#181c23] text-gray-100 rounded-lg shadow-lg p-4 max-w-xs mx-auto border font-mono text-xs"
             style={{ minWidth: 280, fontFamily: "monospace", position: "relative", overflow: "hidden" }}
           >
             <div className="flex flex-col items-center mb-2">
               <span className="text-xl font-bold tracking-widest">Maa Inti Vanta</span>
-              <span className="text-xs">123 Food Street, Hyderabad</span>
-              <span className="text-xs">Ph: 9876543210</span>
+              <span className="text-xs">Ph: 9346604522</span>
             </div>
-            <hr className="my-2 border-gray-400" />
+            <hr className="my-2 border-gray-600" />
             <div className="flex justify-between text-xs mb-2">
               <span>Date: <b>{orderDate}</b></span>
               <span>Bill No: <b>{String(Date.now()).slice(-6)}</b></span>
@@ -391,7 +425,7 @@ export default function BillingModule() {
             <div className="mb-2 text-xs">
               Customer: <b>{selectedCustomer?.name}</b>
             </div>
-            <table className="w-full text-xs border-t border-b border-gray-400 my-2">
+            <table className="w-full text-xs border-t border-b border-gray-600 my-2">
               <thead>
                 <tr className="text-left">
                   <th className="py-1 px-2">Item</th>
@@ -419,7 +453,7 @@ export default function BillingModule() {
               <span>Delivery</span>
               <span>₹{deliveryCharge}</span>
             </div>
-            <div className="flex justify-between text-base font-bold border-t border-gray-400 mt-2 pt-2">
+            <div className="flex justify-between text-base font-bold border-t border-gray-600 mt-2 pt-2">
               <span>Grand Total</span>
               <span>₹{grandTotal}</span>
             </div>
@@ -428,13 +462,13 @@ export default function BillingModule() {
           </div>
           <div className="flex flex-col gap-2 mt-4">
             <Button
-              className="w-full py-4 text-lg font-bold bg-green-700 text-white rounded-lg"
+              className="w-full py-4 text-lg font-bold bg-green-700 text-gray-100 rounded-lg"
               onClick={handleConfirmOrder}
             >
               Confirm Order
             </Button>
             <Button
-              className="w-full py-4 text-lg font-bold bg-blue-700 text-white rounded-lg"
+              className="w-full py-4 text-lg font-bold bg-blue-700 text-gray-100 rounded-lg"
               onClick={handleClearList}
             >
               Clear List
@@ -443,23 +477,43 @@ export default function BillingModule() {
         </div>
       )}
 
-      {/* Cooking and Packaging Dashboards with Copy buttons */}
-      {(cookingMsg || packagingMsg) && (
-        <div className="grid grid-cols-1 gap-4 mt-8">
-          <div className="bg-[rgba(0,0,0,0.2)] rounded-lg p-4">
-            <div className="flex items-center mb-2">
-              <Label className="text-white flex-1">Cooking Dashboard (For Kitchen)</Label>
-              <CopyButton text={cookingMsg} />
-            </div>
-            <Textarea value={cookingMsg} rows={8} readOnly className="bg-[rgba(0,0,0,0.2)] text-white" />
+      {/* Always-visible Cumulative Cooking & Packaging Dashboards */}
+      <div className="grid grid-cols-1 gap-4 mt-8">
+        <div className="bg-[#23272f] rounded-lg p-4">
+          <div className="flex items-center mb-2">
+            <Label className="text-gray-100 flex-1">Cooking Dashboard (Session)</Label>
+            <CopyButton text={cookingText} />
           </div>
-          <div className="bg-[rgba(0,0,0,0.2)] rounded-lg p-4">
-            <div className="flex items-center mb-2">
-              <Label className="text-white flex-1">Packaging Dashboard (For Packing)</Label>
-              <CopyButton text={packagingMsg} />
-            </div>
-            <Textarea value={packagingMsg} rows={8} readOnly className="bg-[rgba(0,0,0,0.2)] text-white" />
+          <Textarea value={cookingText} rows={6} readOnly className="bg-[#181c23] text-gray-100" />
+        </div>
+        <div className="bg-[#23272f] rounded-lg p-4">
+          <div className="flex items-center mb-2">
+            <Label className="text-gray-100 flex-1">Packaging Dashboard (Session)</Label>
+            <CopyButton text={packagingText} />
           </div>
+          <Textarea value={packagingText} rows={6} readOnly className="bg-[#181c23] text-gray-100" />
+        </div>
+        <Button
+          className="w-full py-2 text-base font-bold bg-red-700 text-gray-100 rounded-lg mt-2"
+          onClick={handleClearDashboards}
+        >
+          Clear Dashboards (New Meal Session)
+        </Button>
+      </div>
+
+      {/* Real-time Customer Order History for selected date */}
+      {selectedCustomer && (
+        <div className="bg-[#23272f] rounded-lg p-4 mt-8">
+          <div className="flex items-center mb-2">
+            <Label className="text-gray-100 flex-1">Order History (for selected date)</Label>
+            <CopyButton text={customerHistoryText} />
+          </div>
+          <Textarea
+            value={customerHistoryText}
+            rows={6}
+            readOnly
+            className="bg-[#181c23] text-gray-100"
+          />
         </div>
       )}
     </div>
