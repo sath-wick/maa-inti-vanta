@@ -410,7 +410,7 @@ export default function BillingModule() {
         <div className="mt-4">
           <div
             ref={billRef}
-            className="bg-[#181c23] text-gray-100 rounded-lg shadow-lg p-4 max-w-xs mx-auto border font-mono text-xs"
+            className="bg-white text-black rounded-lg shadow-lg p-4 max-w-xs mx-auto border font-mono text-xs"
             style={{ minWidth: 280, fontFamily: "monospace", position: "relative", overflow: "hidden" }}
           >
             <div className="flex flex-col items-center mb-2">
@@ -457,8 +457,8 @@ export default function BillingModule() {
               <span>Grand Total</span>
               <span>₹{grandTotal}</span>
             </div>
-            <div className="text-center text-xs mt-4 italic">Thank you for dining with us!</div>
-            <div className="absolute bottom-2 right-4 text-[10px] text-gray-400">Powered by Maa Inti Vanta</div>
+            <div className="text-center text-xs mt-4 italic">Thank you for ordering from us!</div>
+            <div className="absolute bottom-1 right-4 text-[7px] text-gray-400">Developed by Sathwik Ponna</div>
           </div>
           <div className="flex flex-col gap-2 mt-4">
             <Button
