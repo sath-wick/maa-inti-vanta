@@ -37,7 +37,7 @@ function CopyButton({ text }) {
   };
   return (
     <button
-      className="ml-2 px-3 py-1 rounded bg-blue-800 text-gray-100 text-xs"
+      className="ml-2 px-3 py-1 rounded bg-blue-800 text-white text-xs"
       onClick={handleCopy}
       type="button"
     >
@@ -46,41 +46,46 @@ function CopyButton({ text }) {
   );
 }
 
-// Multi-select with pills and quantity, default quantity 0
-function MultiSelectWithPills({ label, items, selected, setSelected }) {
-  const handleSelect = (e) => {
-    const itemName = e.target.value;
-    if (!itemName) return;
-    if (!selected.some(i => i.name === itemName)) {
-      setSelected([...selected, { name: itemName, quantity: 0 }]);
-    }
-  };
-  const handleRemove = (name) => setSelected(selected.filter(i => i.name !== name));
-  const handleQuantity = (name, qty) =>
-    setSelected(selected.map(i => i.name === name ? { ...i, quantity: qty } : i));
+// CategorySelector for dropdown + qty + add
+function CategorySelector({ categoryKey, label, items, onAdd }) {
+  const [selectedName, setSelectedName] = useState("");
+  const [qty, setQty] = useState(1);
+
   return (
-    <div className="mb-2">
-      <Label className="text-gray-200">{label}</Label>
-      <select className="w-full mt-1 p-3 rounded bg-[#23272f] text-gray-100 text-base" onChange={handleSelect} value="">
+    <div className="mb-4">
+      <Label className="text-white">{label}</Label>
+      <select
+        className="w-full p-3 rounded bg-[#23272f] text-white text-base mt-1"
+        value={selectedName}
+        onChange={e => setSelectedName(e.target.value)}
+      >
         <option value="">-- Select --</option>
         {items.map(i => (
-          <option key={i.name} value={i.name}>{i.name}</option>
+          <option key={i.name} value={i.name}>{i.name} (₹{i.price})</option>
         ))}
       </select>
-      <div className="flex flex-wrap gap-2 mt-2">
-        {selected.map(i => (
-          <div key={i.name} className="flex items-center bg-[#323844] text-gray-100 rounded-full px-3 py-1">
-            <span>{i.name}</span>
-            <input
-              type="number"
-              min={0}
-              value={i.quantity}
-              onChange={e => handleQuantity(i.name, Number(e.target.value))}
-              className="mx-2 w-12 bg-[#23272f] text-gray-100 rounded"
-            />
-            <button onClick={() => handleRemove(i.name)} className="ml-1 text-red-300 text-lg">×</button>
-          </div>
-        ))}
+      <div className="flex gap-2 mt-2 items-center">
+        <Label className="text-white">Qty</Label>
+        <input
+          type="number"
+          min={1}
+          value={qty}
+          onChange={e => setQty(Number(e.target.value))}
+          className="w-16 p-2 rounded bg-[#23272f] text-white"
+        />
+        <Button
+          className="bg-green-700 text-white px-3 py-1"
+          onClick={() => {
+            if (selectedName && qty > 0) {
+              onAdd(categoryKey, selectedName, qty);
+              setSelectedName("");
+              setQty(1);
+            }
+          }}
+          disabled={!selectedName || qty <= 0}
+        >
+          Add
+        </Button>
       </div>
     </div>
   );
@@ -91,9 +96,6 @@ export default function BillingModule() {
   const [cookingSession, setCookingSession] = usePersistentState("cookingDashboard", {});
   const [packagingSession, setPackagingSession] = usePersistentState("packagingDashboard", {});
 
-  const initialSelectedItems = {
-    breakfast: [], curry: [], daal: [], pickle: [], sambar: [], others: []
-  };
   const initialDeliveryCharge = 30;
   const initialOrderDate = format(new Date(), "yyyy-MM-dd");
 
@@ -110,9 +112,19 @@ export default function BillingModule() {
     sambar: [],
     others: []
   });
-  const [selectedItems, setSelectedItems] = useState(initialSelectedItems);
   const [orderDate, setOrderDate] = useState(initialOrderDate);
   const [deliveryCharge, setDeliveryCharge] = useState(initialDeliveryCharge);
+
+  // Meal/category/item selection
+  const [mealType, setMealType] = useState(""); // breakfast | lunch | dinner
+  const lunchDinnerCategories = [
+    { key: "daal", label: "Daal" },
+    { key: "curry", label: "Curry" },
+    { key: "pickle", label: "Pickle" },
+    { key: "sambar", label: "Sambar" },
+    { key: "others", label: "Others" }
+  ];
+  const [selectedItems, setSelectedItems] = useState([]); // [{category, name, quantity, price}]
 
   // Real-time customer order history for selected date
   const [customerOrders, setCustomerOrders] = useState([]);
@@ -170,36 +182,53 @@ export default function BillingModule() {
   const handleCustomerChange = (id) => {
     if (selectedCustomer && selectedCustomer.id !== id) {
       if (!window.confirm("Switching customer will clear the current billing. Continue?")) return;
-      setSelectedItems(initialSelectedItems);
+      setSelectedItems([]);
       setDeliveryCharge(initialDeliveryCharge);
       setOrderDate(initialOrderDate);
+      setMealType("");
     }
     setSelectedCustomer(customers.find(c => c.id === id));
   };
 
-  // Get price for item
+  // Helper to get price for item
   const getItemPrice = (cat, name) => {
     const arr = inventory[cat] || [];
     const item = arr.find(i => i.name === name);
     return item?.price ? Number(item.price) : 0;
   };
 
-  // Only items with quantity > 0
-  const allSelected = Object.entries(selectedItems).flatMap(([cat, arr]) =>
-    arr.filter(i => i.quantity > 0).map(i => ({ ...i, category: cat, price: getItemPrice(cat, i.name) }))
-  );
-  const totalItemPrice = allSelected.reduce((sum, row) => sum + row.price * row.quantity, 0);
+  // Add or update item in selectedItems
+  const addOrUpdateItem = (category, name, quantity) => {
+    if (!name || quantity <= 0) return;
+    setSelectedItems(items => {
+      const existingIndex = items.findIndex(i => i.category === category && i.name === name);
+      if (existingIndex >= 0) {
+        const updated = [...items];
+        updated[existingIndex].quantity += quantity;
+        return updated;
+      }
+      return [...items, { category, name, quantity, price: getItemPrice(category, name) }];
+    });
+  };
+
+  // Remove item from bill
+  const removeSelectedItem = (index) => {
+    setSelectedItems(items => items.filter((_, i) => i !== index));
+  };
+
+  // Billing calculations
+  const totalItemPrice = selectedItems.reduce((sum, row) => sum + row.price * row.quantity, 0);
   const grandTotal = totalItemPrice + Number(deliveryCharge);
 
   // Confirm order: update session dashboards and DB, then clear selections
   const handleConfirmOrder = async () => {
     if (!selectedCustomer) return alert("Select a customer");
-    if (allSelected.length === 0) return alert("Select at least one item with quantity > 0");
+    if (selectedItems.length === 0) return alert("Add at least one item with quantity > 0");
 
     // Store in DB
     const orderData = {
       date: orderDate,
-      items: allSelected.map(row => ({
+      items: selectedItems.map(row => ({
         name: row.name,
         quantity: row.quantity,
         price: row.price
@@ -212,7 +241,7 @@ export default function BillingModule() {
 
     // Update cooking session
     const newCooking = { ...cookingSession };
-    allSelected.forEach(item => {
+    selectedItems.forEach(item => {
       newCooking[item.name] = (newCooking[item.name] || 0) + item.quantity;
     });
     setCookingSession(newCooking);
@@ -220,7 +249,7 @@ export default function BillingModule() {
     // Update packaging session
     const newPackaging = { ...packagingSession };
     if (!newPackaging[selectedCustomer.name]) newPackaging[selectedCustomer.name] = {};
-    allSelected.forEach(item => {
+    selectedItems.forEach(item => {
       newPackaging[selectedCustomer.name][item.name] =
         (newPackaging[selectedCustomer.name][item.name] || 0) + item.quantity;
     });
@@ -236,14 +265,18 @@ export default function BillingModule() {
       link.click();
     }
 
-    setSelectedItems(initialSelectedItems);
+    setSelectedItems([]);
     setDeliveryCharge(initialDeliveryCharge);
+    setOrderDate(initialOrderDate);
+    setMealType("");
   };
 
   // Clear all selections (for new order)
   const handleClearList = () => {
-    setSelectedItems(initialSelectedItems);
+    setSelectedItems([]);
     setDeliveryCharge(initialDeliveryCharge);
+    setOrderDate(initialOrderDate);
+    setMealType("");
   };
 
   // Clear dashboards (for new meal session)
@@ -286,24 +319,24 @@ export default function BillingModule() {
       {/* Create button at the top, small width */}
       <div className="flex justify-end mb-2">
         <Button
-          className="px-4 py-2 text-sm bg-green-700 text-gray-100 rounded"
+          className="px-4 py-2 text-sm bg-green-700 text-white rounded"
           style={{ minWidth: 80, maxWidth: 100 }}
           onClick={() => setShowCreateCustomer(true)}
         >
           Create
         </Button>
       </div>
-      <h2 className="text-xl font-bold mb-4 text-gray-100 text-center">Billing Module</h2>
+      <h2 className="text-xl font-bold mb-4 text-white text-center">Billing Module</h2>
       <div className="flex flex-col gap-2 bg-[#23272f] rounded-lg p-4">
-        <Label className="text-gray-200">Customer</Label>
+        <Label className="text-white">Customer</Label>
         <Input
           placeholder="Search customer"
           value={searchCustomer}
           onChange={e => setSearchCustomer(e.target.value)}
-          className="w-full mb-2 p-3 rounded bg-[#23272f] text-gray-100 text-base"
+          className="w-full mb-2 p-3 rounded bg-[#23272f] text-white text-base"
         />
         <select
-          className="w-full p-3 rounded bg-[#23272f] text-gray-100 text-base"
+          className="w-full p-3 rounded bg-[#23272f] text-white text-base"
           value={selectedCustomer?.id || ""}
           onChange={e => handleCustomerChange(e.target.value)}
         >
@@ -314,98 +347,85 @@ export default function BillingModule() {
         </select>
       </div>
       <div>
-        <Label className="text-gray-200">Date</Label>
+        <Label className="text-white">Date</Label>
         <Input
           type="date"
           value={orderDate}
           onChange={e => setOrderDate(e.target.value)}
-          className="w-full p-3 rounded bg-[#23272f] text-gray-100 text-base"
+          className="w-full p-3 rounded bg-[#23272f] text-white text-base"
         />
       </div>
       {showCreateCustomer && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/90 z-50">
           <div className="bg-[#23272f] rounded-lg p-4 w-full max-w-xs">
-            <h3 className="font-bold mb-2 text-gray-100">Create Customer</h3>
-            <input placeholder="Name" value={newCustomer.name} onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })} className="w-full mb-2 p-2 border rounded bg-[#181c23] text-gray-100" />
-            <input placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })} className="w-full mb-2 p-2 border rounded bg-[#181c23] text-gray-100" />
+            <h3 className="font-bold mb-2 text-white">Create Customer</h3>
+            <input placeholder="Name" value={newCustomer.name} onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })} className="w-full mb-2 p-2 border rounded bg-[#181c23] text-white" />
+            <input placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })} className="w-full mb-2 p-2 border rounded bg-[#181c23] text-white" />
             <div className="flex gap-2">
-              <Button className="w-full py-2 mb-2 bg-green-700 text-gray-100" onClick={handleCreateCustomer}>Create & Select</Button>
-              <Button className="w-full py-2 bg-gray-700 text-gray-100" onClick={() => setShowCreateCustomer(false)}>Cancel</Button>
+              <Button className="w-full py-2 mb-2 bg-green-700 text-white" onClick={handleCreateCustomer}>Create & Select</Button>
+              <Button className="w-full py-2 bg-gray-700 text-white" onClick={() => setShowCreateCustomer(false)}>Cancel</Button>
             </div>
           </div>
         </div>
       )}
 
-      {selectedCustomer && (
-        <Card className="bg-[#23272f]">
-          <CardContent>
-            <MultiSelectWithPills
-              label="Breakfast"
-              items={inventory.breakfast}
-              selected={selectedItems.breakfast}
-              setSelected={arr => setSelectedItems(s => ({ ...s, breakfast: arr }))}
-            />
-            <MultiSelectWithPills
-              label="Curry"
-              items={inventory.curry}
-              selected={selectedItems.curry}
-              setSelected={arr => setSelectedItems(s => ({ ...s, curry: arr }))}
-            />
-            <MultiSelectWithPills
-              label="Daal"
-              items={inventory.daal}
-              selected={selectedItems.daal}
-              setSelected={arr => setSelectedItems(s => ({ ...s, daal: arr }))}
-            />
-            <MultiSelectWithPills
-              label="Pickle"
-              items={inventory.pickle}
-              selected={selectedItems.pickle}
-              setSelected={arr => setSelectedItems(s => ({ ...s, pickle: arr }))}
-            />
-            <MultiSelectWithPills
-              label="Sambar"
-              items={inventory.sambar}
-              selected={selectedItems.sambar}
-              setSelected={arr => setSelectedItems(s => ({ ...s, sambar: arr }))}
-            />
-            <MultiSelectWithPills
-              label="Others"
-              items={inventory.others}
-              selected={selectedItems.others}
-              setSelected={arr => setSelectedItems(s => ({ ...s, others: arr }))}
-            />
+      {/* Meal/category/item selection */}
+      <div className="mb-4">
+        <Label className="text-white">Select Meal</Label>
+        <select
+          className="w-full p-3 rounded bg-[#23272f] text-white text-base mt-1"
+          value={mealType}
+          onChange={e => {
+            setMealType(e.target.value);
+            setSelectedItems([]);
+          }}
+        >
+          <option value="">-- Select --</option>
+          <option value="breakfast">Breakfast</option>
+          <option value="lunch">Lunch</option>
+          <option value="dinner">Dinner</option>
+        </select>
+      </div>
 
-            <div className="flex flex-col gap-2 mt-6 bg-[#181c23] rounded-lg p-4">
-              <Label className="text-gray-200">Delivery Charges</Label>
-              <div className="flex flex-col gap-2 mt-2">
-                {[
-                  { label: "No delivery", value: 0 },
-                  { label: "Within 3km (+₹30)", value: 30 },
-                  { label: "Beyond 3km (+₹60)", value: 60 }
-                ].map(opt => (
-                  <label key={opt.value} className="flex items-center gap-2 text-gray-100">
-                    <input
-                      type="radio"
-                      name="delivery"
-                      value={opt.value}
-                      checked={deliveryCharge === opt.value}
-                      onChange={() => setDeliveryCharge(opt.value)}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-              <div className="text-right space-y-1 text-gray-100 mt-2">
-                <div>Total Item Price: <b>₹{totalItemPrice}</b></div>
-                <div>Delivery Charges: <b>₹{deliveryCharge}</b></div>
-                <div className="text-lg">Grand Total: <b>₹{grandTotal}</b></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Breakfast items */}
+      {mealType === "breakfast" && (
+        <CategorySelector
+          categoryKey="breakfast"
+          label="Breakfast Items"
+          items={inventory.breakfast || []}
+          onAdd={addOrUpdateItem}
+        />
       )}
 
+      {/* Lunch/Dinner categories all shown */}
+      {(mealType === "lunch" || mealType === "dinner") && (
+        <>
+          <CategorySelector categoryKey="daal" label="Daal" items={inventory.daal || []} onAdd={addOrUpdateItem} />
+          <CategorySelector categoryKey="curry" label="Curry" items={inventory.curry || []} onAdd={addOrUpdateItem} />
+          <CategorySelector categoryKey="pickle" label="Pickle" items={inventory.pickle || []} onAdd={addOrUpdateItem} />
+          <CategorySelector categoryKey="sambar" label="Sambar" items={inventory.sambar || []} onAdd={addOrUpdateItem} />
+          <CategorySelector categoryKey="others" label="Others" items={inventory.others || []} onAdd={addOrUpdateItem} />
+        </>
+      )}
+
+      {/* Show current items to be billed */}
+      {selectedItems.length > 0 && (
+        <div className="mb-4 bg-[#23272f] rounded-lg p-3">
+          <Label className="text-white mb-2">Current Bill Items</Label>
+          {selectedItems.map((item, idx) => (
+            <div key={idx} className="flex justify-between items-center text-white py-1">
+              <span>{item.name} ({item.category}) x{item.quantity} - ₹{item.price * item.quantity}</span>
+              <button
+                className="text-red-400 px-2"
+                onClick={() => removeSelectedItem(idx)}
+                title="Remove"
+              >×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Bill preview and controls */}
       {selectedCustomer && (
         <div className="mt-4">
           <div
@@ -435,7 +455,7 @@ export default function BillingModule() {
                 </tr>
               </thead>
               <tbody>
-                {allSelected.map((row, idx) => (
+                {selectedItems.map((row, idx) => (
                   <tr key={row.category + row.name}>
                     <td className="py-1 px-2">{row.name}</td>
                     <td className="py-1 px-2 text-center">{row.quantity}</td>
@@ -457,18 +477,18 @@ export default function BillingModule() {
               <span>Grand Total</span>
               <span>₹{grandTotal}</span>
             </div>
-            <div className="text-center text-xs mt-4 italic">Thank you for ordering from us!</div>
-            <div className="absolute bottom-1 right-4 text-[7px] text-gray-400">Developed by Sathwik Ponna</div>
+            <div className="text-center text-xs mt-4 italic">Thank you for dining with us!</div>
+            <div className="absolute bottom-2 right-4 text-[10px] text-gray-400">Powered by Maa Inti Vanta</div>
           </div>
           <div className="flex flex-col gap-2 mt-4">
             <Button
-              className="w-full py-4 text-lg font-bold bg-green-700 text-gray-100 rounded-lg"
+              className="w-full py-4 text-lg font-bold bg-green-700 text-white rounded-lg"
               onClick={handleConfirmOrder}
             >
               Confirm Order
             </Button>
             <Button
-              className="w-full py-4 text-lg font-bold bg-blue-700 text-gray-100 rounded-lg"
+              className="w-full py-4 text-lg font-bold bg-blue-700 text-white rounded-lg"
               onClick={handleClearList}
             >
               Clear List
@@ -481,20 +501,20 @@ export default function BillingModule() {
       <div className="grid grid-cols-1 gap-4 mt-8">
         <div className="bg-[#23272f] rounded-lg p-4">
           <div className="flex items-center mb-2">
-            <Label className="text-gray-100 flex-1">Cooking Dashboard (Session)</Label>
+            <Label className="text-white flex-1">Cooking Dashboard (Session)</Label>
             <CopyButton text={cookingText} />
           </div>
-          <Textarea value={cookingText} rows={6} readOnly className="bg-[#181c23] text-gray-100" />
+          <Textarea value={cookingText} rows={6} readOnly className="bg-[#181c23] text-white" />
         </div>
         <div className="bg-[#23272f] rounded-lg p-4">
           <div className="flex items-center mb-2">
-            <Label className="text-gray-100 flex-1">Packaging Dashboard (Session)</Label>
+            <Label className="text-white flex-1">Packaging Dashboard (Session)</Label>
             <CopyButton text={packagingText} />
           </div>
-          <Textarea value={packagingText} rows={6} readOnly className="bg-[#181c23] text-gray-100" />
+          <Textarea value={packagingText} rows={6} readOnly className="bg-[#181c23] text-white" />
         </div>
         <Button
-          className="w-full py-2 text-base font-bold bg-red-700 text-gray-100 rounded-lg mt-2"
+          className="w-full py-2 text-base font-bold bg-red-700 text-white rounded-lg mt-2"
           onClick={handleClearDashboards}
         >
           Clear Dashboards (New Meal Session)
@@ -505,14 +525,14 @@ export default function BillingModule() {
       {selectedCustomer && (
         <div className="bg-[#23272f] rounded-lg p-4 mt-8">
           <div className="flex items-center mb-2">
-            <Label className="text-gray-100 flex-1">Order History (for selected date)</Label>
+            <Label className="!text-red-900 flex-1">Order History (for selected date)</Label>
             <CopyButton text={customerHistoryText} />
           </div>
           <Textarea
             value={customerHistoryText}
             rows={6}
             readOnly
-            className="bg-[#181c23] text-gray-100"
+            className="bg-[#181c23] text-white"
           />
         </div>
       )}
