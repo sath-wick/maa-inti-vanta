@@ -59,14 +59,6 @@ function EditOrderModal({ orders, onSave, onClose }) {
     );
   };
 
-  const handleDeliveryChange = (orderIdx, value) => {
-    setEditOrders(orders =>
-      orders.map((order, oIdx) =>
-        oIdx === orderIdx ? { ...order, deliveryCharges: value } : order
-      )
-    );
-  };
-
   const handleDeleteOrder = async (orderIdx) => {
     const order = editOrders[orderIdx];
     if (!window.confirm(`Delete this order from ${order.date}? This cannot be undone.`)) return;
@@ -74,6 +66,25 @@ function EditOrderModal({ orders, onSave, onClose }) {
     await remove(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`));
     setEditOrders(orders => orders.filter((_, idx) => idx !== orderIdx));
     setDeleting(false);
+  };
+
+  // NEW: Remove item from an order
+  const handleDeleteItem = (orderIdx, itemIdx) => {
+    setEditOrders(orders =>
+      orders.map((order, oIdx) =>
+        oIdx === orderIdx
+          ? { ...order, items: order.items.filter((_, iIdx) => iIdx !== itemIdx) }
+          : order
+      )
+    );
+  };
+
+  const handleDeliveryChange = (orderIdx, value) => {
+    setEditOrders(orders =>
+      orders.map((order, oIdx) =>
+        oIdx === orderIdx ? { ...order, deliveryCharges: value } : order
+      )
+    );
   };
 
   const handleSave = async () => {
@@ -130,6 +141,14 @@ function EditOrderModal({ orders, onSave, onClose }) {
                   onChange={e => handleItemChange(orderIdx, idx, "price", Number(e.target.value))}
                   className="bg-[#181c23] text-gray-100 w-16"
                 />
+                {/* X button to delete item */}
+                <button
+                  className="text-red-400 text-lg font-bold px-2"
+                  title="Delete item"
+                  onClick={() => handleDeleteItem(orderIdx, idx)}
+                >
+                  ×
+                </button>
               </div>
             ))}
             <div className="flex items-center mt-2">
@@ -152,6 +171,7 @@ function EditOrderModal({ orders, onSave, onClose }) {
     </div>
   );
 }
+
 
 
 export default function OrderHistoryModule() {
