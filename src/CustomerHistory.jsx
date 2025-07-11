@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Label } from "@/components/ui/Label";
 
+// Three-dot menu for edit/delete
 function ThreeDotMenu({ onEdit, onDelete }) {
   const [open, setOpen] = useState(false);
   return (
@@ -35,59 +36,92 @@ function ThreeDotMenu({ onEdit, onDelete }) {
   );
 }
 
-function EditOrderModal({ order, onSave, onClose }) {
-  const [editItems, setEditItems] = useState(order.items.map(item => ({ ...item })));
-  const [editDelivery, setEditDelivery] = useState(order.deliveryCharges || 0);
+// Edit Modal for multiple orders
+function EditOrderModal({ orders, onSave, onClose }) {
+  const [editOrders, setEditOrders] = useState(orders.map(order => ({
+    ...order,
+    items: order.items.map(item => ({ ...item }))
+  })));
 
-  const handleItemChange = (idx, field, value) => {
-    setEditItems(items =>
-      items.map((item, i) => i === idx ? { ...item, [field]: value } : item)
+  const handleItemChange = (orderIdx, itemIdx, field, value) => {
+    setEditOrders(orders =>
+      orders.map((order, oIdx) =>
+        oIdx === orderIdx
+          ? {
+              ...order,
+              items: order.items.map((item, iIdx) =>
+                iIdx === itemIdx ? { ...item, [field]: value } : item
+              )
+            }
+          : order
+      )
     );
   };
 
-  const handleSave = () => {
-    if (!window.confirm("Are you sure you want to save changes to this order?")) return;
-    const grandTotal = editItems.reduce((sum, item) => sum + item.price * item.quantity, 0) + Number(editDelivery);
-    onSave({ ...order, items: editItems, deliveryCharges: editDelivery, grandTotal });
+  const handleDeliveryChange = (orderIdx, value) => {
+    setEditOrders(orders =>
+      orders.map((order, oIdx) =>
+        oIdx === orderIdx ? { ...order, deliveryCharges: value } : order
+      )
+    );
+  };
+
+  const handleSave = async () => {
+    if (!window.confirm("Are you sure you want to save changes to these orders?")) return;
+    await Promise.all(
+      editOrders.map(order => {
+        const grandTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) + Number(order.deliveryCharges || 0);
+        return update(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`), {
+          ...order,
+          grandTotal
+        });
+      })
+    );
+    onSave();
   };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/80 z-50">
-      <div className="bg-[#23272f] rounded-lg p-6 w-full max-w-md">
-        <h3 className="font-bold mb-2 text-gray-100">Edit Order</h3>
-        {editItems.map((item, idx) => (
-          <div key={idx} className="flex items-center gap-2 mt-2">
-            <Input
-              value={item.name}
-              onChange={e => handleItemChange(idx, "name", e.target.value)}
-              className="bg-[#181c23] text-gray-100 w-24"
-            />
-            <Input
-              type="number"
-              value={item.quantity}
-              min={0}
-              onChange={e => handleItemChange(idx, "quantity", Number(e.target.value))}
-              className="bg-[#181c23] text-gray-100 w-16"
-            />
-            <Input
-              type="number"
-              value={item.price}
-              min={0}
-              onChange={e => handleItemChange(idx, "price", Number(e.target.value))}
-              className="bg-[#181c23] text-gray-100 w-16"
-            />
+      <div className="bg-[#23272f] rounded-lg p-6 w-full max-w-md overflow-auto max-h-[90vh]">
+        <h3 className="font-bold mb-2 text-gray-100">Edit Orders</h3>
+        {editOrders.map((order, orderIdx) => (
+          <div key={order.orderId} className="mb-4 border-b border-gray-700 pb-2">
+            <div className="text-gray-200 mb-1">Order {orderIdx + 1} ({order.date})</div>
+            {order.items.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-2 mt-2">
+                <Input
+                  value={item.name}
+                  onChange={e => handleItemChange(orderIdx, idx, "name", e.target.value)}
+                  className="bg-[#181c23] text-gray-100 w-24"
+                />
+                <Input
+                  type="number"
+                  value={item.quantity}
+                  min={0}
+                  onChange={e => handleItemChange(orderIdx, idx, "quantity", Number(e.target.value))}
+                  className="bg-[#181c23] text-gray-100 w-16"
+                />
+                <Input
+                  type="number"
+                  value={item.price}
+                  min={0}
+                  onChange={e => handleItemChange(orderIdx, idx, "price", Number(e.target.value))}
+                  className="bg-[#181c23] text-gray-100 w-16"
+                />
+              </div>
+            ))}
+            <div className="flex items-center mt-2">
+              <span className="text-gray-200 mr-2">Delivery:</span>
+              <Input
+                type="number"
+                value={order.deliveryCharges || 0}
+                min={0}
+                onChange={e => handleDeliveryChange(orderIdx, Number(e.target.value))}
+                className="bg-[#181c23] text-gray-100 w-16"
+              />
+            </div>
           </div>
         ))}
-        <div className="flex items-center mt-2">
-          <span className="text-gray-200 mr-2">Delivery:</span>
-          <Input
-            type="number"
-            value={editDelivery}
-            min={0}
-            onChange={e => setEditDelivery(Number(e.target.value))}
-            className="bg-[#181c23] text-gray-100 w-16"
-          />
-        </div>
         <div className="flex gap-2 mt-4">
           <Button className="bg-green-700 text-gray-100 px-3 py-1" onClick={handleSave}>Save</Button>
           <Button className="bg-gray-700 text-gray-100 px-3 py-1" onClick={onClose}>Cancel</Button>
@@ -101,7 +135,7 @@ export default function OrderHistoryModule() {
   const [allOrders, setAllOrders] = useState([]);
   const [selectedDate, setSelectedDate] = useState("");
   const [search, setSearch] = useState("");
-  const [editOrder, setEditOrder] = useState(null);
+  const [editOrders, setEditOrders] = useState(null);
 
   // Fetch all customer order history
   useEffect(() => {
@@ -158,16 +192,34 @@ export default function OrderHistoryModule() {
   });
 
   // Edit and Delete handlers
-  const handleEdit = (order) => setEditOrder(order);
-
-  const handleEditSave = async (order) => {
-    await update(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`), order);
-    setEditOrder(null);
+  const handleEdit = (cust) => {
+    // If no date, edit all orders for this customer; else, only for the date
+    const ordersToEdit = selectedDate
+      ? cust.orders
+      : allOrders.filter(o => o.customerId === cust.orders[0].customerId);
+    setEditOrders(ordersToEdit);
   };
 
-  const handleDelete = async (order) => {
-    if (!window.confirm("Are you sure you want to delete this order? This cannot be undone.")) return;
-    await remove(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`));
+  const handleDelete = async (cust) => {
+    if (!cust.orders.length) return;
+    if (!selectedDate) {
+      // Delete all orders for this customer
+      if (!window.confirm(`Delete ALL orders for ${cust.name}? This cannot be undone.`)) return;
+      const allCustOrders = allOrders.filter(o => o.customerId === cust.orders[0].customerId);
+      await Promise.all(
+        allCustOrders.map(order =>
+          remove(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`))
+        )
+      );
+    } else {
+      // Delete only orders for this date
+      if (!window.confirm(`Delete all orders for ${cust.name} on ${selectedDate}? This cannot be undone.`)) return;
+      await Promise.all(
+        cust.orders.map(order =>
+          remove(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`))
+        )
+      );
+    }
   };
 
   return (
@@ -258,7 +310,6 @@ export default function OrderHistoryModule() {
         {Object.values(customerMap)
           .filter(cust => cust.name.toLowerCase().includes(search.toLowerCase()))
           .map(cust => {
-            // Calculate grand total for this customer for the selected date
             const customerDayTotal = cust.orders.reduce(
               (sum, order) => sum + Number(order.grandTotal || 0), 0
             );
@@ -267,8 +318,8 @@ export default function OrderHistoryModule() {
                 <div className="flex items-center font-bold text-gray-100">
                   {cust.name}
                   <ThreeDotMenu
-                    onEdit={() => handleEdit(cust.orders[0])}
-                    onDelete={() => handleDelete(cust.orders[0])}
+                    onEdit={() => handleEdit(cust)}
+                    onDelete={() => handleDelete(cust)}
                   />
                 </div>
                 {cust.orders.map((order, idx) => (
@@ -282,7 +333,6 @@ export default function OrderHistoryModule() {
                     <div className="font-semibold text-gray-100">Total: ₹{order.grandTotal || 0}</div>
                   </div>
                 ))}
-                {/* Grand Total for the day */}
                 <div className="ml-4 mt-2 font-bold text-green-300 border-t border-gray-700 pt-2">
                   Grand Total for {selectedDate || "all time"}: ₹{customerDayTotal}
                 </div>
@@ -292,14 +342,11 @@ export default function OrderHistoryModule() {
       </div>
 
       {/* Edit Modal */}
-      {editOrder && (
+      {editOrders && (
         <EditOrderModal
-          order={editOrder}
-          onSave={async (newOrder) => {
-            await update(ref(database, `customerOrderHistory/${editOrder.customerId}/orders/${editOrder.orderId}`), newOrder);
-            setEditOrder(null);
-          }}
-          onClose={() => setEditOrder(null)}
+          orders={editOrders}
+          onSave={() => setEditOrders(null)}
+          onClose={() => setEditOrders(null)}
         />
       )}
     </div>

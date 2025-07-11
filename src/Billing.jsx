@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { database } from "./firebase";
 import { ref, onValue, push } from "firebase/database";
 import html2canvas from "html2canvas-pro";
-import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
@@ -46,10 +45,17 @@ function CopyButton({ text }) {
   );
 }
 
+// Helper: alphabetically sort items by name
+function sortItems(items) {
+  return [...(items || [])].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // CategorySelector for dropdown + qty + add
 function CategorySelector({ categoryKey, label, items, onAdd }) {
   const [selectedName, setSelectedName] = useState("");
   const [qty, setQty] = useState(1);
+
+  const sortedItems = sortItems(items);
 
   return (
     <div className="mb-4">
@@ -60,7 +66,7 @@ function CategorySelector({ categoryKey, label, items, onAdd }) {
         onChange={e => setSelectedName(e.target.value)}
       >
         <option value="">-- Select --</option>
-        {items.map(i => (
+        {sortedItems.map(i => (
           <option key={i.name} value={i.name}>{i.name} (₹{i.price})</option>
         ))}
       </select>
@@ -370,6 +376,8 @@ export default function BillingModule() {
       )}
 
       {/* Meal/category/item selection */}
+      {selectedCustomer && (
+      <>
       <div className="mb-4">
         <Label className="text-white">Select Meal</Label>
         <select
@@ -407,6 +415,49 @@ export default function BillingModule() {
           <CategorySelector categoryKey="others" label="Others" items={inventory.others || []} onAdd={addOrUpdateItem} />
         </>
       )}
+
+      {/* Delivery Charges Radio Buttons */}
+      <div className="flex flex-col gap-2 mt-6 bg-[#181c23] rounded-lg p-4">
+        <Label className="text-white">Delivery Charges</Label>
+        <div className="flex flex-col gap-2 mt-2">
+          <label className="flex items-center gap-2 text-white">
+            <input
+              type="radio"
+              name="delivery"
+              value={0}
+              checked={deliveryCharge === 0}
+              onChange={() => setDeliveryCharge(0)}
+            />
+            No delivery
+          </label>
+          <label className="flex items-center gap-2 text-white">
+            <input
+              type="radio"
+              name="delivery"
+              value={30}
+              checked={deliveryCharge === 30}
+              onChange={() => setDeliveryCharge(30)}
+            />
+            Within 3km (+₹30)
+          </label>
+          <label className="flex items-center gap-2 text-white">
+            <input
+              type="radio"
+              name="delivery"
+              value={60}
+              checked={deliveryCharge === 60}
+              onChange={() => setDeliveryCharge(60)}
+            />
+            Beyond 3km (+₹60)
+          </label>
+        </div>
+        <div className="text-right space-y-1 text-white mt-2">
+          <div>Total Item Price: <b>₹{totalItemPrice}</b></div>
+          <div>Delivery Charges: <b>₹{deliveryCharge}</b></div>
+          <div className="text-lg">Grand Total: <b>₹{grandTotal}</b></div>
+        </div>
+      </div>
+      </>)}
 
       {/* Show current items to be billed */}
       {selectedItems.length > 0 && (
@@ -525,7 +576,7 @@ export default function BillingModule() {
       {selectedCustomer && (
         <div className="bg-[#23272f] rounded-lg p-4 mt-8">
           <div className="flex items-center mb-2">
-            <Label className="!text-red-900 flex-1">Order History (for selected date)</Label>
+            <Label className="text-white flex-1">Order History (for selected date)</Label>
             <CopyButton text={customerHistoryText} />
           </div>
           <Textarea
