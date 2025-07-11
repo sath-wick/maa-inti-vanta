@@ -42,6 +42,7 @@ function EditOrderModal({ orders, onSave, onClose }) {
     ...order,
     items: order.items.map(item => ({ ...item }))
   })));
+  const [deleting, setDeleting] = useState(false);
 
   const handleItemChange = (orderIdx, itemIdx, field, value) => {
     setEditOrders(orders =>
@@ -66,6 +67,15 @@ function EditOrderModal({ orders, onSave, onClose }) {
     );
   };
 
+  const handleDeleteOrder = async (orderIdx) => {
+    const order = editOrders[orderIdx];
+    if (!window.confirm(`Delete this order from ${order.date}? This cannot be undone.`)) return;
+    setDeleting(true);
+    await remove(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`));
+    setEditOrders(orders => orders.filter((_, idx) => idx !== orderIdx));
+    setDeleting(false);
+  };
+
   const handleSave = async () => {
     if (!window.confirm("Are you sure you want to save changes to these orders?")) return;
     await Promise.all(
@@ -84,9 +94,21 @@ function EditOrderModal({ orders, onSave, onClose }) {
     <div className="fixed inset-0 flex items-center justify-center bg-black/80 z-50">
       <div className="bg-[#23272f] rounded-lg p-6 w-full max-w-md overflow-auto max-h-[90vh]">
         <h3 className="font-bold mb-2 text-gray-100">Edit Orders</h3>
+        {editOrders.length === 0 && (
+          <div className="text-gray-400 mb-4">No orders to edit.</div>
+        )}
         {editOrders.map((order, orderIdx) => (
           <div key={order.orderId} className="mb-4 border-b border-gray-700 pb-2">
-            <div className="text-gray-200 mb-1">Order {orderIdx + 1} ({order.date})</div>
+            <div className="flex items-center mb-1">
+              <span className="text-gray-200">Order {orderIdx + 1} ({order.date})</span>
+              <button
+                className="ml-3 px-2 py-1 rounded text-xs bg-red-700 text-white hover:bg-red-800"
+                disabled={deleting}
+                onClick={() => handleDeleteOrder(orderIdx)}
+              >
+                Delete
+              </button>
+            </div>
             {order.items.map((item, idx) => (
               <div key={idx} className="flex items-center gap-2 mt-2">
                 <Input
@@ -123,13 +145,14 @@ function EditOrderModal({ orders, onSave, onClose }) {
           </div>
         ))}
         <div className="flex gap-2 mt-4">
-          <Button className="bg-green-700 text-gray-100 px-3 py-1" onClick={handleSave}>Save</Button>
-          <Button className="bg-gray-700 text-gray-100 px-3 py-1" onClick={onClose}>Cancel</Button>
+          <Button className="bg-green-700 text-gray-100 px-3 py-1" onClick={handleSave} disabled={deleting}>Save</Button>
+          <Button className="bg-gray-700 text-gray-100 px-3 py-1" onClick={onClose} disabled={deleting}>Cancel</Button>
         </div>
       </div>
     </div>
   );
 }
+
 
 export default function OrderHistoryModule() {
   const [allOrders, setAllOrders] = useState([]);
