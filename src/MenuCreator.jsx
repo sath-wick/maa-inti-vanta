@@ -1,4 +1,3 @@
-// src/components/ui/app.jsx
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -7,14 +6,13 @@ import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
 import { format } from "date-fns";
 import { database, auth } from "./firebase";
-import { ref, onValue, set } from "firebase/database";
+import { ref, onValue, set, update } from "firebase/database";
 import { Dialog, DialogContent } from "@/components/ui/Dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import Login from "./Login";
 
 export default function MenuCreator() {
-  // NOTE: lunchDinner is the unified inventory for both lunch and dinner!
   const [inventory, setInventory] = useState({ breakfast: [], lunchDinner: {} });
   const [selected, setSelected] = useState({ breakfast: [], lunch: {}, dinner: {} });
   const [deliveryDate, setDeliveryDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -32,7 +30,6 @@ export default function MenuCreator() {
     const invRef = ref(database, "inventory");
     onValue(invRef, (snapshot) => {
       const data = snapshot.val();
-      // Ensure structure
       if (data) {
         if (!Array.isArray(data.breakfast)) data.breakfast = [];
         if (!data.lunchDinner) data.lunchDinner = {};
@@ -49,7 +46,6 @@ export default function MenuCreator() {
     navigator.clipboard.writeText(text);
   };
 
-  // For both lunch and dinner, use lunchDinner inventory
   const addItem = (meal, value) => {
     if (meal === "breakfast") {
       const item = inventory.breakfast.find(i => i.name === value);
@@ -91,7 +87,7 @@ export default function MenuCreator() {
     }
   };
 
-  // Inventory editing helpers
+  // Inventory editing helpers (unchanged)
   const updateNestedItem = (tab, sub, index, field, value) => {
     const copy = { ...editableInventory };
     if (tab === "breakfast") {
@@ -123,15 +119,14 @@ export default function MenuCreator() {
     setEditableInventory(copy);
   };
 
-  // Message generation logic (unchanged, but uses lunchDinner)
-  const generateMessage = () => {
+  // Flatten lunch/dinner for saving menu
+  const flattenLunchDinner = mealObj =>
+    subcategories.flatMap(sub => mealObj[sub] || []);
+
+  // Combined Generate Message & Save Menu
+  const generateMessageAndSaveMenu = async () => {
+    // Message generation logic
     const deliveryDay = format(new Date(deliveryDate), "dd/MMMM/yyyy");
-    const to12Hour = (time24) => {
-      const [hour, minute] = time24.split(":");
-      const date = new Date();
-      date.setHours(parseInt(hour), parseInt(minute));
-      return format(date, "hh:mm a");
-    };
     const formatEnglishSection = (emoji, title, items, deadline, dateLabel) => {
       const lines = Object.entries(items)
         .map(([sub, arr]) =>
@@ -169,20 +164,24 @@ export default function MenuCreator() {
       `ధన్యవాదాలు`;
     setGeneratedMsg(englishMsg);
     setGeneratedTeluguMsg(teluguMsg);
-  };
 
-  const saveToFirebase = async () => {
+    // Save menu to Firebase
     if (!auth.currentUser) {
-      alert("❌ Please login to save changes.");
+      alert("❌ Please login to save menu.");
       return;
     }
-    const copy = { ...editableInventory };
-    if (!Array.isArray(copy.breakfast)) copy.breakfast = [];
-    if (!copy.lunchDinner) copy.lunchDinner = {};
-    const invRef = ref(database, "inventory");
-    await set(invRef, copy);
-    setInventory(copy);
-    setShowEditor(false);
+    const menuRef = ref(database, `menus/${deliveryDate}`);
+    const menuData = {
+      breakfast: selected.breakfast.map(({ name, price }) => ({ name, price })),
+      lunch: flattenLunchDinner(selected.lunch).map(({ name, price }) => ({ name, price })),
+      dinner: flattenLunchDinner(selected.dinner).map(({ name, price }) => ({ name, price }))
+    };
+    await update(menuRef, menuData);
+
+    // Clear all selections
+    setSelected({ breakfast: [], lunch: {}, dinner: {} });
+
+    alert("✅ Menu generated and saved for " + deliveryDate);
   };
 
   if (!user) return <Login />;
@@ -295,8 +294,12 @@ export default function MenuCreator() {
         </Card>
       </div>
 
-      {/* Generate & Edit Buttons */}
-      <Button onClick={generateMessage}>Generate Message</Button>
+      {/* One Button: Generate Message & Save Menu */}
+      <Button className="mt-4" onClick={generateMessageAndSaveMenu}>
+        Generate Message & Save Menu
+      </Button>
+
+      {/* Edit Inventory Button */}
       <Button variant="outline" onClick={() => {
         const copy = JSON.parse(JSON.stringify(inventory));
         if (!Array.isArray(copy.breakfast)) copy.breakfast = [];
@@ -390,7 +393,9 @@ export default function MenuCreator() {
               ))}
             </TabsContent>
           </Tabs>
-          <Button className="mt-4" onClick={saveToFirebase}>💾 Save</Button>
+          <Button className="mt-4" onClick={async () => {
+            await saveToFirebase();
+          }}>💾 Save</Button>
           <Button variant="outline" className="mt-2" onClick={() => setShowEditor(false)}>❌ Cancel</Button>
         </DialogContent>
       </Dialog>

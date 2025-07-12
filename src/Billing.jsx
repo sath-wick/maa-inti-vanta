@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
 import { format } from "date-fns";
 
-// Persistent state hook using localStorage
 function usePersistentState(key, initialValue) {
   const [state, setState] = React.useState(() => {
     try {
@@ -24,7 +23,6 @@ function usePersistentState(key, initialValue) {
   return [state, setState];
 }
 
-// Copy-to-clipboard button
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
@@ -45,114 +43,39 @@ function CopyButton({ text }) {
   );
 }
 
-// Helper: alphabetically sort items by name
-function sortItems(items) {
-  return [...(items || [])].sort((a, b) => a.name.localeCompare(b.name));
-}
-
-// CategorySelector for dropdown + qty + add
-function CategorySelector({ categoryKey, label, items, onAdd }) {
-  const [selectedName, setSelectedName] = useState("");
-  const [qty, setQty] = useState(1);
-
-  const sortedItems = sortItems(items);
-
-  return (
-    <div className="mb-4">
-      <Label className="text-white">{label}</Label>
-      <select
-        className="w-full p-3 rounded bg-[#23272f] text-white text-base mt-1"
-        value={selectedName}
-        onChange={e => setSelectedName(e.target.value)}
-      >
-        <option value="">-- Select --</option>
-        {sortedItems.map(i => (
-          <option key={i.name} value={i.name}>{i.name} (₹{i.price})</option>
-        ))}
-      </select>
-      <div className="flex gap-2 mt-2 items-center">
-        <Label className="text-white">Qty</Label>
-        <input
-          type="number"
-          min={1}
-          value={qty}
-          onChange={e => setQty(Number(e.target.value))}
-          className="w-16 p-2 rounded bg-[#23272f] text-white"
-        />
-        <Button
-          className="bg-green-700 text-white px-3 py-1"
-          onClick={() => {
-            if (selectedName && qty > 0) {
-              onAdd(categoryKey, selectedName, qty);
-              setSelectedName("");
-              setQty(1);
-            }
-          }}
-          disabled={!selectedName || qty <= 0}
-        >
-          Add
-        </Button>
-      </div>
-    </div>
-  );
+function getMealShort(mealType) {
+  if (mealType === "breakfast") return "brk";
+  if (mealType === "lunch") return "lun";
+  if (mealType === "dinner") return "din";
+  return "oth";
 }
 
 export default function BillingModule() {
-  // Persistent dashboards
   const [cookingSession, setCookingSession] = usePersistentState("cookingDashboard", {});
   const [packagingSession, setPackagingSession] = usePersistentState("packagingDashboard", {});
-
   const initialDeliveryCharge = 30;
   const initialOrderDate = format(new Date(), "yyyy-MM-dd");
 
   const [customers, setCustomers] = useState([]);
   const [searchCustomer, setSearchCustomer] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [showCreateCustomer, setShowCreateCustomer] = useState(false);
-  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "" });
-  const [inventory, setInventory] = useState({
-    breakfast: [],
-    curry: [],
-    daal: [],
-    pickle: [],
-    sambar: [],
-    others: []
-  });
   const [orderDate, setOrderDate] = useState(initialOrderDate);
   const [deliveryCharge, setDeliveryCharge] = useState(initialDeliveryCharge);
 
-  // Meal/category/item selection
   const [mealType, setMealType] = useState(""); // breakfast | lunch | dinner
-  const lunchDinnerCategories = [
-    { key: "daal", label: "Daal" },
-    { key: "curry", label: "Curry" },
-    { key: "pickle", label: "Pickle" },
-    { key: "sambar", label: "Sambar" },
-    { key: "others", label: "Others" }
-  ];
-  const [selectedItems, setSelectedItems] = useState([]); // [{category, name, quantity, price}]
-
-  // Real-time customer order history for selected date
+  const [menuItems, setMenuItems] = useState([]); // Items for selected date/meal
+  const [selectedItems, setSelectedItems] = useState([]); // [{name, quantity, price}]
   const [customerOrders, setCustomerOrders] = useState([]);
+  const [menuLoading, setMenuLoading] = useState(false);
+  const [menuError, setMenuError] = useState("");
 
   const billRef = useRef(null);
 
-  // Load customers and inventory from Firebase
+  // Load customers from Firebase
   useEffect(() => {
     onValue(ref(database, "customers"), snap => {
       const data = snap.val() || {};
       setCustomers(Object.entries(data).map(([id, v]) => ({ id, ...v })));
-    });
-    onValue(ref(database, "inventory"), snap => {
-      const data = snap.val() || {};
-      setInventory({
-        breakfast: data.breakfast || [],
-        curry: (data.lunchDinner && data.lunchDinner.curry) || [],
-        daal: (data.lunchDinner && data.lunchDinner.daal) || [],
-        pickle: (data.lunchDinner && data.lunchDinner.pickle) || [],
-        sambar: (data.lunchDinner && data.lunchDinner.sambar) || [],
-        others: (data.lunchDinner && data.lunchDinner.others) || []
-      });
     });
   }, []);
 
@@ -175,14 +98,29 @@ export default function BillingModule() {
     return () => unsub();
   }, [selectedCustomer, orderDate]);
 
-  // Customer creation
-  const handleCreateCustomer = async () => {
-    if (!newCustomer.name || !newCustomer.phone) return alert("Enter name and phone");
-    const newRef = push(ref(database, "customers"), newCustomer);
-    setShowCreateCustomer(false);
-    setNewCustomer({ name: "", phone: "" });
-    setSelectedCustomer({ ...newCustomer, id: newRef.key });
-  };
+  // Load menu for selected date & mealType
+  useEffect(() => {
+    if (!orderDate || !mealType) {
+      setMenuItems([]);
+      setMenuError("");
+      return;
+    }
+    setMenuLoading(true);
+    setMenuError("");
+    const menuRef = ref(database, `menus/${orderDate}/${mealType}`);
+    onValue(menuRef, snap => {
+      const data = snap.val();
+      if (Array.isArray(data) && data.length > 0) {
+        setMenuItems(data);
+        setMenuError("");
+      } else {
+        setMenuItems([]);
+        setMenuError("No menu set for this date and meal. Please create a menu first.");
+      }
+      setMenuLoading(false);
+      setSelectedItems([]); // Clear bill if menu changes
+    });
+  }, [orderDate, mealType]);
 
   // Customer change with confirmation
   const handleCustomerChange = (id) => {
@@ -196,24 +134,17 @@ export default function BillingModule() {
     setSelectedCustomer(customers.find(c => c.id === id));
   };
 
-  // Helper to get price for item
-  const getItemPrice = (cat, name) => {
-    const arr = inventory[cat] || [];
-    const item = arr.find(i => i.name === name);
-    return item?.price ? Number(item.price) : 0;
-  };
-
   // Add or update item in selectedItems
-  const addOrUpdateItem = (category, name, quantity) => {
+  const addOrUpdateItem = (name, price, quantity) => {
     if (!name || quantity <= 0) return;
     setSelectedItems(items => {
-      const existingIndex = items.findIndex(i => i.category === category && i.name === name);
+      const existingIndex = items.findIndex(i => i.name === name);
       if (existingIndex >= 0) {
         const updated = [...items];
         updated[existingIndex].quantity += quantity;
         return updated;
       }
-      return [...items, { category, name, quantity, price: getItemPrice(category, name) }];
+      return [...items, { name, quantity, price }];
     });
   };
 
@@ -229,11 +160,14 @@ export default function BillingModule() {
   // Confirm order: update session dashboards and DB, then clear selections
   const handleConfirmOrder = async () => {
     if (!selectedCustomer) return alert("Select a customer");
-    if (selectedItems.length === 0) return alert("Add at least one item with quantity > 0");
+    if (!selectedItems.length) return alert("Add at least one item with quantity > 0");
+    if (!mealType) return alert("Please select a meal type (breakfast, lunch, or dinner).");
+    if (!menuItems.length) return alert("No menu set for this date and meal.");
 
     // Store in DB
     const orderData = {
       date: orderDate,
+      mealType,
       items: selectedItems.map(row => ({
         name: row.name,
         quantity: row.quantity,
@@ -245,21 +179,33 @@ export default function BillingModule() {
     };
     await push(ref(database, `customerOrderHistory/${selectedCustomer.id}/orders`), orderData);
 
-    // Update cooking session
-    const newCooking = { ...cookingSession };
-    selectedItems.forEach(item => {
-      newCooking[item.name] = (newCooking[item.name] || 0) + item.quantity;
+    // Update cooking session (grouped by mealType)
+    setCookingSession(prev => {
+      const next = { ...prev };
+      if (!next[mealType]) next[mealType] = {};
+      selectedItems.forEach(item => {
+        next[mealType][item.name] = (next[mealType][item.name] || 0) + item.quantity;
+      });
+      return next;
     });
-    setCookingSession(newCooking);
 
-    // Update packaging session
-    const newPackaging = { ...packagingSession };
-    if (!newPackaging[selectedCustomer.name]) newPackaging[selectedCustomer.name] = {};
-    selectedItems.forEach(item => {
-      newPackaging[selectedCustomer.name][item.name] =
-        (newPackaging[selectedCustomer.name][item.name] || 0) + item.quantity;
+    // Update packaging session (grouped by mealType)
+    setPackagingSession(prev => {
+      const next = { ...prev };
+      if (!next[mealType]) next[mealType] = {};
+      if (!next[mealType][selectedCustomer.name]) next[mealType][selectedCustomer.name] = {};
+      selectedItems.forEach(item => {
+        next[mealType][selectedCustomer.name][item.name] =
+          (next[mealType][selectedCustomer.name][item.name] || 0) + item.quantity;
+      });
+      return next;
     });
-    setPackagingSession(newPackaging);
+
+    // Bill file name: DDMMYY_[brk/lun/din]_[customer_name].png
+    const billDate = format(new Date(orderDate), "ddMMyy");
+    const billMeal = getMealShort(mealType);
+    const billCustomer = selectedCustomer.name.replace(/\s+/g, "_");
+    const billFileName = `${billDate}_${billMeal}_${billCustomer}.png`;
 
     // Download bill image (not displayed in UI)
     if (billRef.current) {
@@ -267,13 +213,12 @@ export default function BillingModule() {
       const image = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = image;
-      link.download = `bill_${selectedCustomer.name || "customer"}.png`;
+      link.download = billFileName;
       link.click();
     }
 
     setSelectedItems([]);
     setDeliveryCharge(initialDeliveryCharge);
-    setOrderDate(initialOrderDate);
     setMealType("");
   };
 
@@ -291,23 +236,36 @@ export default function BillingModule() {
     setPackagingSession({});
   };
 
-  // Cooking dashboard textarea content
-  const cookingText = Object.entries(cookingSession)
-    .map(([item, qty]) => `${item}: ${qty}`)
-    .join("\n");
+  // Cooking dashboard textarea content (grouped by mealType)
+  const cookingText =
+    Object.entries(cookingSession)
+      .map(([meal, items]) =>
+        `${meal.charAt(0).toUpperCase() + meal.slice(1)}\n` +
+        Object.entries(items)
+          .map(([item, qty]) => `${item}: ${qty}`)
+          .join("\n")
+      )
+      .join("\n\n");
 
-  // Packaging dashboard textarea content
-  const packagingText = Object.entries(packagingSession)
-    .map(([customer, items]) =>
-      `${customer}:\n` +
-      Object.entries(items).map(([item, qty]) => `  ${item} x${qty}`).join("\n")
-    ).join("\n\n");
+  // Packaging dashboard textarea content (grouped by mealType)
+  const packagingText =
+    Object.entries(packagingSession)
+      .map(([meal, customers]) =>
+        `${meal.charAt(0).toUpperCase() + meal.slice(1)}:\n` +
+        Object.entries(customers)
+          .map(([customer, items]) =>
+            `${customer}:\n` +
+            Object.entries(items).map(([item, qty]) => `  ${item} x${qty}`).join("\n")
+          ).join("\n")
+      )
+      .join("\n\n");
 
   // Customer order history textarea content
   const customerHistoryText =
     customerOrders.length === 0
       ? "No orders for this date."
       : customerOrders.map(order =>
+          `Meal: ${order.mealType ? order.mealType.charAt(0).toUpperCase() + order.mealType.slice(1) : "Unknown"}\n` +
           order.items.map(item =>
             `${item.name} - ${item.quantity} - ₹${item.price * item.quantity}`
           ).join("\n") +
@@ -322,14 +280,13 @@ export default function BillingModule() {
 
   return (
     <div className="w-full max-w-xs mx-auto p-4 space-y-4 bg-[#181c23] rounded-lg">
-      {/* Create button at the top, small width */}
       <div className="flex justify-end mb-2">
         <Button
           className="px-4 py-2 text-sm bg-green-700 text-white rounded"
           style={{ minWidth: 80, maxWidth: 100 }}
-          onClick={() => setShowCreateCustomer(true)}
+          onClick={() => window.location.reload()}
         >
-          Create
+          Refresh
         </Button>
       </div>
       <h2 className="text-xl font-bold mb-4 text-white text-center">Billing Module</h2>
@@ -361,103 +318,109 @@ export default function BillingModule() {
           className="w-full p-3 rounded bg-[#23272f] text-white text-base"
         />
       </div>
-      {showCreateCustomer && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/90 z-50">
-          <div className="bg-[#23272f] rounded-lg p-4 w-full max-w-xs">
-            <h3 className="font-bold mb-2 text-white">Create Customer</h3>
-            <input placeholder="Name" value={newCustomer.name} onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })} className="w-full mb-2 p-2 border rounded bg-[#181c23] text-white" />
-            <input placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })} className="w-full mb-2 p-2 border rounded bg-[#181c23] text-white" />
-            <div className="flex gap-2">
-              <Button className="w-full py-2 mb-2 bg-green-700 text-white" onClick={handleCreateCustomer}>Create & Select</Button>
-              <Button className="w-full py-2 bg-gray-700 text-white" onClick={() => setShowCreateCustomer(false)}>Cancel</Button>
-            </div>
+      {selectedCustomer && (
+        <div className="mb-4">
+          <Label className="text-white">Select Meal</Label>
+          <select
+            className="w-full p-3 rounded bg-[#23272f] text-white text-base mt-1"
+            value={mealType}
+            onChange={e => setMealType(e.target.value)}
+          >
+            <option value="">-- Select --</option>
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch">Lunch</option>
+            <option value="dinner">Dinner</option>
+          </select>
+        </div>
+      )}
+
+      {/* Menu-based item selection */}
+      {menuLoading && <div className="text-yellow-400">Loading menu...</div>}
+      {menuError && <div className="text-red-400">{menuError}</div>}
+      {menuItems.length > 0 && (
+        <div className="mb-4 bg-[#23272f] rounded-lg p-3">
+          <Label className="text-white mb-2">Menu Items</Label>
+          <div className="flex flex-col gap-2">
+            {menuItems.map((item, idx) => (
+              <div key={item.name} className="flex items-center gap-2">
+                <span className="flex-1 text-white">{item.name} (₹{item.price})</span>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="Qty"
+                  className="w-16 bg-[#181c23] text-white"
+                  value={selectedItems.find(i => i.name === item.name)?.quantity || ""}
+                  onChange={e => {
+                    const qty = Number(e.target.value);
+                    if (qty <= 0) {
+                      setSelectedItems(items => items.filter(i => i.name !== item.name));
+                    } else {
+                      setSelectedItems(items => {
+                        const idx = items.findIndex(i => i.name === item.name);
+                        if (idx >= 0) {
+                          const updated = [...items];
+                          updated[idx].quantity = qty;
+                          return updated;
+                        }
+                        return [...items, { name: item.name, price: item.price, quantity: qty }];
+                      });
+                    }
+                  }}
+                />
+                <Button
+                  className="bg-red-700 text-white px-2 py-1"
+                  onClick={() => removeSelectedItem(selectedItems.findIndex(i => i.name === item.name))}
+                  disabled={!selectedItems.some(i => i.name === item.name)}
+                >×</Button>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Meal/category/item selection */}
-      {selectedCustomer && (
-      <>
-      <div className="mb-4">
-        <Label className="text-white">Select Meal</Label>
-        <select
-          className="w-full p-3 rounded bg-[#23272f] text-white text-base mt-1"
-          value={mealType}
-          onChange={e => {
-            setMealType(e.target.value);
-            setSelectedItems([]);
-          }}
-        >
-          <option value="">-- Select --</option>
-          <option value="breakfast">Breakfast</option>
-          <option value="lunch">Lunch</option>
-          <option value="dinner">Dinner</option>
-        </select>
-      </div>
-
-      {/* Breakfast items */}
-      {mealType === "breakfast" && (
-        <CategorySelector
-          categoryKey="breakfast"
-          label="Breakfast Items"
-          items={inventory.breakfast || []}
-          onAdd={addOrUpdateItem}
-        />
-      )}
-
-      {/* Lunch/Dinner categories all shown */}
-      {(mealType === "lunch" || mealType === "dinner") && (
-        <>
-          <CategorySelector categoryKey="daal" label="Daal" items={inventory.daal || []} onAdd={addOrUpdateItem} />
-          <CategorySelector categoryKey="curry" label="Curry" items={inventory.curry || []} onAdd={addOrUpdateItem} />
-          <CategorySelector categoryKey="pickle" label="Pickle" items={inventory.pickle || []} onAdd={addOrUpdateItem} />
-          <CategorySelector categoryKey="sambar" label="Sambar" items={inventory.sambar || []} onAdd={addOrUpdateItem} />
-          <CategorySelector categoryKey="others" label="Others" items={inventory.others || []} onAdd={addOrUpdateItem} />
-        </>
-      )}
-
-      {/* Delivery Charges Radio Buttons */}
-      <div className="flex flex-col gap-2 mt-6 bg-[#181c23] rounded-lg p-4">
-        <Label className="text-white">Delivery Charges</Label>
-        <div className="flex flex-col gap-2 mt-2">
-          <label className="flex items-center gap-2 text-white">
-            <input
-              type="radio"
-              name="delivery"
-              value={0}
-              checked={deliveryCharge === 0}
-              onChange={() => setDeliveryCharge(0)}
-            />
-            No delivery
-          </label>
-          <label className="flex items-center gap-2 text-white">
-            <input
-              type="radio"
-              name="delivery"
-              value={30}
-              checked={deliveryCharge === 30}
-              onChange={() => setDeliveryCharge(30)}
-            />
-            Within 3km (+₹30)
-          </label>
-          <label className="flex items-center gap-2 text-white">
-            <input
-              type="radio"
-              name="delivery"
-              value={60}
-              checked={deliveryCharge === 60}
-              onChange={() => setDeliveryCharge(60)}
-            />
-            Beyond 3km (+₹60)
-          </label>
+      {/* Delivery Charges */}
+      {menuItems.length > 0 && (
+        <div className="flex flex-col gap-2 mt-6 bg-[#181c23] rounded-lg p-4">
+          <Label className="text-white">Delivery Charges</Label>
+          <div className="flex flex-col gap-2 mt-2">
+            <label className="flex items-center gap-2 text-white">
+              <input
+                type="radio"
+                name="delivery"
+                value={0}
+                checked={deliveryCharge === 0}
+                onChange={() => setDeliveryCharge(0)}
+              />
+              No delivery
+            </label>
+            <label className="flex items-center gap-2 text-white">
+              <input
+                type="radio"
+                name="delivery"
+                value={30}
+                checked={deliveryCharge === 30}
+                onChange={() => setDeliveryCharge(30)}
+              />
+              Within 3km (+₹30)
+            </label>
+            <label className="flex items-center gap-2 text-white">
+              <input
+                type="radio"
+                name="delivery"
+                value={60}
+                checked={deliveryCharge === 60}
+                onChange={() => setDeliveryCharge(60)}
+              />
+              Beyond 3km (+₹60)
+            </label>
+          </div>
+          <div className="text-right space-y-1 text-white mt-2">
+            <div>Total Item Price: <b>₹{totalItemPrice}</b></div>
+            <div>Delivery Charges: <b>₹{deliveryCharge}</b></div>
+            <div className="text-lg">Grand Total: <b>₹{grandTotal}</b></div>
+          </div>
         </div>
-        <div className="text-right space-y-1 text-white mt-2">
-          <div>Total Item Price: <b>₹{totalItemPrice}</b></div>
-          <div>Delivery Charges: <b>₹{deliveryCharge}</b></div>
-          <div className="text-lg">Grand Total: <b>₹{grandTotal}</b></div>
-        </div>
-      </div>
-      </>)}
+      )}
 
       {/* Show current items to be billed */}
       {selectedItems.length > 0 && (
@@ -465,7 +428,7 @@ export default function BillingModule() {
           <Label className="text-white mb-2">Current Bill Items</Label>
           {selectedItems.map((item, idx) => (
             <div key={idx} className="flex justify-between items-center text-white py-1">
-              <span>{item.name} ({item.category}) x{item.quantity} - ₹{item.price * item.quantity}</span>
+              <span>{item.name} x{item.quantity} - ₹{item.price * item.quantity}</span>
               <button
                 className="text-red-400 px-2"
                 onClick={() => removeSelectedItem(idx)}
@@ -496,6 +459,9 @@ export default function BillingModule() {
             <div className="mb-2 text-xs">
               Customer: <b>{selectedCustomer?.name}</b>
             </div>
+            <div className="mb-1 text-xs">
+              Meal: <b>{mealType ? mealType.charAt(0).toUpperCase() + mealType.slice(1) : ""}</b>
+            </div>
             <table className="w-full text-xs border-t border-b border-gray-600 my-2">
               <thead>
                 <tr className="text-left">
@@ -507,7 +473,7 @@ export default function BillingModule() {
               </thead>
               <tbody>
                 {selectedItems.map((row, idx) => (
-                  <tr key={row.category + row.name}>
+                  <tr key={row.name}>
                     <td className="py-1 px-2">{row.name}</td>
                     <td className="py-1 px-2 text-center">{row.quantity}</td>
                     <td className="py-1 px-2 text-right">₹{row.price}</td>
@@ -535,6 +501,7 @@ export default function BillingModule() {
             <Button
               className="w-full py-4 text-lg font-bold bg-green-700 text-white rounded-lg"
               onClick={handleConfirmOrder}
+              disabled={menuError || menuLoading || !menuItems.length}
             >
               Confirm Order
             </Button>
@@ -548,7 +515,7 @@ export default function BillingModule() {
         </div>
       )}
 
-      {/* Always-visible Cumulative Cooking & Packaging Dashboards */}
+      {/* Cooking & Packaging Dashboards */}
       <div className="grid grid-cols-1 gap-4 mt-8">
         <div className="bg-[#23272f] rounded-lg p-4">
           <div className="flex items-center mb-2">

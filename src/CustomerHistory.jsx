@@ -1,397 +1,352 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { ref, onValue, remove, update } from "firebase/database";
 import { database } from "./firebase";
-import { ref, onValue, update, remove } from "firebase/database";
 import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
 import { Label } from "@/components/ui/Label";
+import { format, parse } from "date-fns";
 
-// Three-dot menu for edit/delete
-function ThreeDotMenu({ onEdit, onDelete }) {
-  const [open, setOpen] = useState(false);
+// Define meal labels for display purposes
+const mealLabels = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner"
+};
+
+// Helper function to convert 'yyyy-MM-dd' to 'dd-MM-yyyy' for display
+function toDDMMYYYY(dateStr) {
+  if (!dateStr) return "";
+  const d = parse(dateStr, "yyyy-MM-dd", new Date());
+  return format(d, "dd-MM-yyyy");
+}
+
+// Helper function to convert 'dd-MM-yyyy' to 'yyyy-MM-dd' for internal use (Firebase)
+function toYYYYMMDD(dateStr) {
+  if (!dateStr) return "";
+  const d = parse(dateStr, "dd-MM-yyyy", new Date());
+  return format(d, "yyyy-MM-dd");
+}
+
+// Simple SVG component for the three-dot icon
+function ThreeDotIcon(props) {
   return (
-    <div className="relative inline-block">
-      <button
-        className="px-2 py-1 text-gray-300 hover:text-white"
-        onClick={() => setOpen(o => !o)}
-      >
-        ⋮
-      </button>
-      {open && (
-        <div className="absolute right-0 mt-2 w-28 bg-[#23272f] border border-gray-700 rounded shadow-lg z-10">
-          <button
-            className="block w-full text-left px-4 py-2 text-gray-100 hover:bg-gray-700"
-            onClick={() => { setOpen(false); onEdit(); }}
-          >
-            Edit
-          </button>
-          <button
-            className="block w-full text-left px-4 py-2 text-red-400 hover:bg-gray-700"
-            onClick={() => { setOpen(false); onDelete(); }}
-          >
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
+    <svg width={24} height={24} {...props} viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="5" cy="12" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="19" cy="12" r="2" />
+    </svg>
   );
 }
 
-// Edit Modal for multiple orders
-function EditOrderModal({ orders, onSave, onClose }) {
-  const [editOrders, setEditOrders] = useState(orders.map(order => ({
-    ...order,
-    items: order.items.map(item => ({ ...item }))
-  })));
-  const [deleting, setDeleting] = useState(false);
+export default function OrderHistorySummary() {
+  const today = format(new Date(), "dd-MM-yyyy"); // Default date to today's date in dd-MM-yyyy format
+  const [selectedDate, setSelectedDate] = useState(today); // State for the date filter
+  const [allOrders, setAllOrders] = useState([]); // Stores all fetched orders from Firebase
+  const [search, setSearch] = useState(""); // State for customer search filter
+  const [menuAnchor, setMenuAnchor] = useState(null); // Stores the customerId for which the 3-dot menu is open
 
-  const handleItemChange = (orderIdx, itemIdx, field, value) => {
-    setEditOrders(orders =>
-      orders.map((order, oIdx) =>
-        oIdx === orderIdx
-          ? {
-              ...order,
-              items: order.items.map((item, iIdx) =>
-                iIdx === itemIdx ? { ...item, [field]: value } : item
-              )
-            }
-          : order
-      )
-    );
-  };
-
-  const handleDeleteOrder = async (orderIdx) => {
-    const order = editOrders[orderIdx];
-    if (!window.confirm(`Delete this order from ${order.date}? This cannot be undone.`)) return;
-    setDeleting(true);
-    await remove(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`));
-    setEditOrders(orders => orders.filter((_, idx) => idx !== orderIdx));
-    setDeleting(false);
-  };
-
-  // NEW: Remove item from an order
-  const handleDeleteItem = (orderIdx, itemIdx) => {
-    setEditOrders(orders =>
-      orders.map((order, oIdx) =>
-        oIdx === orderIdx
-          ? { ...order, items: order.items.filter((_, iIdx) => iIdx !== itemIdx) }
-          : order
-      )
-    );
-  };
-
-  const handleDeliveryChange = (orderIdx, value) => {
-    setEditOrders(orders =>
-      orders.map((order, oIdx) =>
-        oIdx === orderIdx ? { ...order, deliveryCharges: value } : order
-      )
-    );
-  };
-
-  const handleSave = async () => {
-    if (!window.confirm("Are you sure you want to save changes to these orders?")) return;
-    await Promise.all(
-      editOrders.map(order => {
-        const grandTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) + Number(order.deliveryCharges || 0);
-        return update(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`), {
-          ...order,
-          grandTotal
-        });
-      })
-    );
-    onSave();
-  };
-
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/80 z-50">
-      <div className="bg-[#23272f] rounded-lg p-6 w-full max-w-md overflow-auto max-h-[90vh]">
-        <h3 className="font-bold mb-2 text-gray-100">Edit Orders</h3>
-        {editOrders.length === 0 && (
-          <div className="text-gray-400 mb-4">No orders to edit.</div>
-        )}
-        {editOrders.map((order, orderIdx) => (
-          <div key={order.orderId} className="mb-4 border-b border-gray-700 pb-2">
-            <div className="flex items-center mb-1">
-              <span className="text-gray-200">Order {orderIdx + 1} ({order.date})</span>
-              <button
-                className="ml-3 px-2 py-1 rounded text-xs bg-red-700 text-white hover:bg-red-800"
-                disabled={deleting}
-                onClick={() => handleDeleteOrder(orderIdx)}
-              >
-                Delete
-              </button>
-            </div>
-            {order.items.map((item, idx) => (
-              <div key={idx} className="flex items-center gap-2 mt-2">
-                <Input
-                  value={item.name}
-                  onChange={e => handleItemChange(orderIdx, idx, "name", e.target.value)}
-                  className="bg-[#181c23] text-gray-100 w-24"
-                />
-                <Input
-                  type="number"
-                  value={item.quantity}
-                  min={0}
-                  onChange={e => handleItemChange(orderIdx, idx, "quantity", Number(e.target.value))}
-                  className="bg-[#181c23] text-gray-100 w-16"
-                />
-                <Input
-                  type="number"
-                  value={item.price}
-                  min={0}
-                  onChange={e => handleItemChange(orderIdx, idx, "price", Number(e.target.value))}
-                  className="bg-[#181c23] text-gray-100 w-16"
-                />
-                {/* X button to delete item */}
-                <button
-                  className="text-red-400 text-lg font-bold px-2"
-                  title="Delete item"
-                  onClick={() => handleDeleteItem(orderIdx, idx)}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <div className="flex items-center mt-2">
-              <span className="text-gray-200 mr-2">Delivery:</span>
-              <Input
-                type="number"
-                value={order.deliveryCharges || 0}
-                min={0}
-                onChange={e => handleDeliveryChange(orderIdx, Number(e.target.value))}
-                className="bg-[#181c23] text-gray-100 w-16"
-              />
-            </div>
-          </div>
-        ))}
-        <div className="flex gap-2 mt-4">
-          <Button className="bg-green-700 text-gray-100 px-3 py-1" onClick={handleSave} disabled={deleting}>Save</Button>
-          <Button className="bg-gray-700 text-gray-100 px-3 py-1" onClick={onClose} disabled={deleting}>Cancel</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-
-export default function OrderHistoryModule() {
-  const [allOrders, setAllOrders] = useState([]);
-  const [selectedDate, setSelectedDate] = useState("");
-  const [search, setSearch] = useState("");
-  const [editOrders, setEditOrders] = useState(null);
-
-  // Fetch all customer order history
+  // Effect hook to fetch all customer order history from Firebase on component mount
   useEffect(() => {
-    const unsub = onValue(ref(database, "customerOrderHistory"), snap => {
+    const ordersRef = ref(database, "customerOrderHistory");
+    const unsubscribe = onValue(ordersRef, snap => {
       const data = snap.val() || {};
-      const orders = [];
-      Object.entries(data).forEach(([customerId, val]) => {
-        if (val.orders) {
-          Object.entries(val.orders).forEach(([orderId, order]) => {
-            orders.push({
+      const loadedOrders = [];
+      // Iterate through customers and their orders to flatten the structure
+      Object.entries(data).forEach(([customerId, customerData]) => {
+        if (customerData.orders) {
+          Object.entries(customerData.orders).forEach(([orderId, order]) => {
+            loadedOrders.push({
               ...order,
               customerId,
-              customerName: order.customerName || val.name || "",
+              customerName: order.customerName || customerData.name || "", // Ensure customer name is available
               orderId
             });
           });
         }
       });
-      setAllOrders(orders);
+      setAllOrders(loadedOrders); // Update the state with fetched orders
     });
-    return () => unsub();
+    return () => unsubscribe(); // Cleanup function to detach the listener on unmount
   }, []);
 
-  // Filtered by date
+  // Filter orders based on the selected date. If no date is selected (cleared), show all orders.
   const filteredOrders = selectedDate
-    ? allOrders.filter(order => order.date === selectedDate)
+    ? allOrders.filter(order => order.date === toYYYYMMDD(selectedDate))
     : allOrders;
 
-  // SUMMARY: Only show if date is selected
-  function getSummary(orders) {
-    const summary = {};
-    let totalDelivery = 0;
-    let grandTotal = 0;
-    orders.forEach(order => {
-      order.items.forEach(item => {
-        if (!summary[item.name]) summary[item.name] = { quantity: 0, price: 0 };
-        summary[item.name].quantity += Number(item.quantity);
-        summary[item.name].price += Number(item.price) * Number(item.quantity);
-      });
-      totalDelivery += Number(order.deliveryCharges || 0);
-      grandTotal += Number(order.grandTotal || 0);
-    });
-    return { summary, totalDelivery, grandTotal };
-  }
-  const { summary, totalDelivery, grandTotal } = getSummary(filteredOrders);
-  const { summary: allSummary, totalDelivery: allDelivery, grandTotal: allGrand } = getSummary(allOrders);
+  // --- SUMMARY LOGIC ---
+  // Initialize objects to aggregate data for the summary section
+  const summaryMeals = { breakfast: {}, lunch: {}, dinner: {} };
+  const mealTotals = { breakfast: 0, lunch: 0, dinner: 0 };
+  const deliveryTotals = { breakfast: 0, lunch: 0, dinner: 0 };
 
-  // Group by customer for filtered orders
+  // Populate summary data by iterating through filtered orders
+  filteredOrders.forEach(order => {
+    const meal = order.mealType;
+    if (!mealLabels[meal]) return; // Skip if mealType is not recognized (e.g., 'unknown')
+    order.items.forEach(item => {
+      // Aggregate item quantities and ensure price is stored for calculation
+      if (!summaryMeals[meal][item.name]) {
+        summaryMeals[meal][item.name] = { quantity: 0, price: item.price };
+      }
+      summaryMeals[meal][item.name].quantity += item.quantity;
+    });
+    // Calculate total earnings from items and delivery charges for each meal
+    mealTotals[meal] += order.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    deliveryTotals[meal] += Number(order.deliveryCharges || 0);
+  });
+
+  // --- INDIVIDUAL CUSTOMER HISTORY LOGIC ---
+  // Create a map to group orders by customer for the detailed history view
   const customerMap = {};
   filteredOrders.forEach(order => {
     const id = order.customerId;
-    if (!customerMap[id]) customerMap[id] = { name: order.customerName, orders: [] };
-    customerMap[id].orders.push(order);
+    if (!customerMap[id]) {
+      customerMap[id] = { name: order.customerName, meals: {}, orderIds: {} };
+    }
+    const meal = order.mealType;
+    if (!customerMap[id].meals[meal]) {
+      customerMap[id].meals[meal] = [];
+    }
+    customerMap[id].meals[meal].push({ ...order }); // Add the full order object
+    customerMap[id].orderIds[order.orderId] = order; // Store order by ID for quick lookup (e.g., for item removal)
   });
 
-  // Edit and Delete handlers
-  const handleEdit = (cust) => {
-    // If no date, edit all orders for this customer; else, only for the date
-    const ordersToEdit = selectedDate
-      ? cust.orders
-      : allOrders.filter(o => o.customerId === cust.orders[0].customerId);
-    setEditOrders(ordersToEdit);
-  };
+  // --- ACTION HANDLERS ---
 
-  const handleDelete = async (cust) => {
-    if (!cust.orders.length) return;
-    if (!selectedDate) {
-      // Delete all orders for this customer
-      if (!window.confirm(`Delete ALL orders for ${cust.name}? This cannot be undone.`)) return;
-      const allCustOrders = allOrders.filter(o => o.customerId === cust.orders[0].customerId);
-      await Promise.all(
-        allCustOrders.map(order =>
-          remove(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`))
-        )
-      );
-    } else {
-      // Delete only orders for this date
-      if (!window.confirm(`Delete all orders for ${cust.name} on ${selectedDate}? This cannot be undone.`)) return;
-      await Promise.all(
-        cust.orders.map(order =>
-          remove(ref(database, `customerOrderHistory/${order.customerId}/orders/${order.orderId}`))
-        )
-      );
+  // Handles the deletion of an entire customer record from Firebase
+  const handleDeleteCustomer = async (customerId) => {
+    setMenuAnchor(null); // Close the 3-dot menu
+    if (window.confirm("Are you sure you want to delete ALL orders for this customer? This action cannot be undone.")) {
+      await remove(ref(database, `customerOrderHistory/${customerId}`));
     }
   };
 
+  // Placeholder for the "Edit" customer functionality
+  const handleEditCustomer = (customerId) => {
+    setMenuAnchor(null); // Close the 3-dot menu
+    alert(`Edit functionality for customer ${customerId} is not yet implemented.`);
+  };
+
+  // Handles the deletion of all orders for a specific meal for a customer on the selected date
+  const handleDeleteMeal = async (customerId, meal) => {
+    if (!window.confirm(`Are you sure you want to delete all ${meal} orders for this customer for the selected date?`)) return;
+    // Get all order IDs for the specified meal for the current customer
+    const ordersToDelete = (customerMap[customerId].meals[meal] || []).map(o => o.orderId);
+    // Remove each order individually
+    for (const orderId of ordersToDelete) {
+      await remove(ref(database, `customerOrderHistory/${customerId}/orders/${orderId}`));
+    }
+  };
+
+  // Handles the removal of a single item from an order
+  const handleRemoveItem = async (customerId, orderId, itemIdx) => {
+    const order = customerMap[customerId].orderIds[orderId]; // Get the specific order
+    const newItems = order.items.filter((_, idx) => idx !== itemIdx); // Filter out the item to be removed
+
+    if (newItems.length === 0) {
+      // If no items remain in the order, delete the entire order
+      await remove(ref(database, `customerOrderHistory/${customerId}/orders/${orderId}`));
+    } else {
+      // Otherwise, update the order with the remaining items
+      await update(ref(database, `customerOrderHistory/${customerId}/orders/${orderId}`), { items: newItems });
+    }
+  };
+
+  // Calculate the grand total for all items and delivery charges across all meals
+  const grandTotal =
+    Object.values(mealTotals).reduce((a, b) => a + b, 0) +
+    Object.values(deliveryTotals).reduce((a, b) => a + b, 0);
+
   return (
-    <div className="w-full max-w-md mx-auto p-4 space-y-6 bg-[#181c23] rounded-lg">
-      {/* Date Selector */}
+    <div className="w-full max-w-2xl mx-auto p-4 space-y-8 bg-[#181c23] rounded-lg">
+      {/* Date selection and filter */}
       <div className="flex flex-col md:flex-row gap-2 items-center mb-2">
         <label className="text-gray-200 font-bold">Select date:</label>
         <Input
-          type="date"
-          value={selectedDate}
-          onChange={e => setSelectedDate(e.target.value)}
+          type="date" // Use type="date" for native date picker UI
+          value={toYYYYMMDD(selectedDate)} // Convert dd-MM-yyyy to yyyy-MM-dd for input value
+          onChange={e => setSelectedDate(toDDMMYYYY(e.target.value))} // Convert input value back to dd-MM-yyyy for state
           className="w-full md:w-auto p-2 rounded bg-[#23272f] text-gray-100"
         />
-        <Button
-          className="ml-2 px-3 py-2 bg-gray-700 text-gray-100 text-xs"
-          onClick={() => setSelectedDate("")}
+        <button
+          className="ml-2 px-3 py-2 bg-gray-700 text-gray-100 text-xs rounded"
+          onClick={() => setSelectedDate("")} // Clear the date filter to show all orders
         >
           Clear
-        </Button>
+        </button>
       </div>
 
-      {/* SUMMARY Section: Only show if date is selected */}
-      {selectedDate && (
-        <div className="rounded-lg shadow p-4 mb-4 bg-[#23272f] border border-[#23272f]">
-          <div className="flex items-center mb-2">
-            <h3 className="text-lg font-bold flex-1 text-gray-100">SUMMARY</h3>
-          </div>
-          <div>
-            {Object.entries(summary).map(([name, { quantity, price }]) => (
-              <div key={name} className="flex justify-between py-1 border-b border-[#23272f] text-sm text-gray-100">
-                <span>{name}</span>
-                <span>{quantity}</span>
-                <span>₹{price}</span>
-              </div>
-            ))}
-            <div className="flex justify-between mt-2 font-semibold text-gray-200">
-              <span>Total Delivery charges:</span>
-              <span>₹{totalDelivery}</span>
+      {/* --- SUMMARY SECTION --- */}
+      <div>
+        <h2 className="text-xl font-bold text-white mb-2">Summary</h2>
+        {Object.entries(mealLabels).map(([mealKey, mealLabel]) => (
+          <div key={mealKey} className="mb-4">
+            <div className="font-semibold text-lg text-gray-200 mb-1">{mealLabel}</div>
+            {Object.keys(summaryMeals[mealKey]).length === 0 ? (
+              <div className="text-gray-400 text-sm mb-2">No orders</div>
+            ) : (
+              <table className="w-full mb-1" style={{ borderCollapse: "collapse" }}>
+                <tbody>
+                  {Object.entries(summaryMeals[mealKey]).map(([itemName, item]) => (
+                    <tr key={itemName} style={{ border: "none" }}>
+                      <td
+                        className="py-1 px-1 text-gray-100"
+                        style={{ verticalAlign: "middle", width: "33%" }}
+                      >
+                        {itemName}
+                      </td>
+                      <td
+                        className="py-1 px-1 text-gray-100 text-center"
+                        style={{ verticalAlign: "middle", width: "33%" }}
+                      >
+                        {item.quantity}
+                      </td>
+                      <td
+                        className="py-1 px-1 text-gray-100 text-right"
+                        style={{ verticalAlign: "middle", width: "33%" }}
+                      >
+                        ₹{item.price * item.quantity}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {/* Display meal-specific totals (items and delivery) */}
+            <div className="flex justify-between text-gray-300 text-sm mb-0">
+              <span>Total:</span>
+              <span>₹{mealTotals[mealKey]}</span>
             </div>
-            <div className="flex justify-between font-bold text-gray-100">
-              <span>Grand Total:</span>
-              <span>₹{grandTotal}</span>
+            <div className="flex justify-between text-gray-300 text-sm mb-2">
+              <span>Delivery total:</span>
+              <span>₹{deliveryTotals[mealKey]}</span>
             </div>
           </div>
+        ))}
+        {/* Display the grand total for all meals */}
+        <div className="flex justify-between text-lg font-bold text-white border-t border-gray-600 pt-2 mt-2">
+          <span>GRAND TOTAL:</span>
+          <span>₹{grandTotal}</span>
         </div>
-      )}
+      </div>
 
-      {/* ALL TIME SUMMARY: Only show if no date is selected */}
-      {!selectedDate && (
-        <div className="rounded-lg shadow p-4 mb-4 bg-[#23272f] border border-[#23272f]">
-          <div className="flex items-center mb-2">
-            <h3 className="text-lg font-bold flex-1 text-gray-100">ALL TIME SUMMARY</h3>
-          </div>
-          <div>
-            {Object.entries(allSummary).map(([name, { quantity, price }]) => (
-              <div key={name} className="flex justify-between py-1 border-b border-[#23272f] text-sm text-gray-100">
-                <span>{name}</span>
-                <span>{quantity}</span>
-                <span>₹{price}</span>
-              </div>
-            ))}
-            <div className="flex justify-between mt-2 font-semibold text-gray-200">
-              <span>Total Delivery charges:</span>
-              <span>₹{allDelivery}</span>
-            </div>
-            <div className="flex justify-between font-bold text-gray-100">
-              <span>Grand Total:</span>
-              <span>₹{allGrand}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* INDIVIDUAL CUSTOMER HISTORY */}
-      <div className="bg-[#23272f] rounded-lg shadow p-4">
-        <Label className="text-gray-100 mb-2">INDIVIDUAL CUSTOMER HISTORY</Label>
+      {/* --- INDIVIDUAL CUSTOMER HISTORY SECTION --- */}
+      <div>
+        <h2 className="text-xl font-bold text-white mb-2">Individual customer history</h2>
+        {/* Customer search input */}
+        <Label className="text-gray-100 mb-2">Search Customer</Label>
         <Input
           placeholder="Search customer..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="w-full mb-4 p-2 rounded bg-[#181c23] text-gray-100"
         />
+        {/* Message if no customer records are found after filtering/searching */}
         {Object.values(customerMap)
           .filter(cust => cust.name.toLowerCase().includes(search.toLowerCase()))
-          .length === 0 && (
-            <div className="text-gray-400 text-sm">No customer records found.</div>
-          )}
-        {Object.values(customerMap)
-          .filter(cust => cust.name.toLowerCase().includes(search.toLowerCase()))
-          .map(cust => {
-            const customerDayTotal = cust.orders.reduce(
-              (sum, order) => sum + Number(order.grandTotal || 0), 0
-            );
-            return (
-              <div key={cust.name} className="mb-6">
-                <div className="flex items-center font-bold text-gray-100">
-                  {cust.name}
-                  <ThreeDotMenu
-                    onEdit={() => handleEdit(cust)}
-                    onDelete={() => handleDelete(cust)}
-                  />
-                </div>
-                {cust.orders.map((order, idx) => (
-                  <div key={order.orderId} className="ml-4 text-sm text-gray-200">
-                    {order.items.map((item, i) =>
-                      <div key={i}>
-                        {item.name} - {item.quantity} - ₹{item.price * item.quantity}
-                      </div>
-                    )}
-                    <div className="text-gray-400">Delivery: ₹{order.deliveryCharges || 0}</div>
-                    <div className="font-semibold text-gray-100">Total: ₹{order.grandTotal || 0}</div>
-                  </div>
-                ))}
-                <div className="ml-4 mt-2 font-bold text-green-300 border-t border-gray-700 pt-2">
-                  Grand Total for {selectedDate || "all time"}: ₹{customerDayTotal}
+          .length === 0 && <div className="text-gray-400 text-sm">No customer records found.</div>}
+
+        {/* Render individual customer cards */}
+        {Object.entries(customerMap)
+          .filter(([_, cust]) => cust.name.toLowerCase().includes(search.toLowerCase()))
+          .map(([customerId, cust]) => (
+            <div key={customerId} className="mb-8 bg-[#23272f] rounded-lg p-3">
+              <div className="flex items-center justify-between mb-1 relative">
+                <span className="font-bold text-gray-100 text-lg">{cust.name}</span>
+                {/* Three-dot menu button */}
+                <div>
+                  <button
+                    className="text-gray-400 p-1 hover:bg-gray-700 rounded"
+                    onClick={() => setMenuAnchor(menuAnchor === customerId ? null : customerId)} // Toggle menu
+                    aria-label="Open customer menu"
+                  >
+                    <ThreeDotIcon />
+                  </button>
+                  {/* Dropdown menu for Edit/Delete */}
+                  {menuAnchor === customerId && (
+                    <div
+                      className="absolute right-0 mt-2 w-32 bg-white rounded shadow-lg z-10"
+                      onMouseLeave={() => setMenuAnchor(null)} // Close menu on mouse leave
+                    >
+                      <button
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                        onClick={() => handleEditCustomer(customerId)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="block w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100"
+                        onClick={() => handleDeleteCustomer(customerId)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-            );
-          })}
-      </div>
+              {/* Render orders grouped by meal type for each customer */}
+              {Object.entries(mealLabels).map(([mealKey, mealLabel]) => {
+                const orders = cust.meals[mealKey] || [];
+                if (!orders.length) return null; // Don't render if no orders for this meal
 
-      {/* Edit Modal */}
-      {editOrders && (
-        <EditOrderModal
-          orders={editOrders}
-          onSave={() => setEditOrders(null)}
-          onClose={() => setEditOrders(null)}
-        />
-      )}
+                return (
+                  <div key={mealKey} className="mb-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-gray-200 font-semibold">{mealLabel}:</span>
+                      {/* Delete meal button with confirmation */}
+                      <button
+                        className="text-red-400 text-xs"
+                        onClick={() => handleDeleteMeal(customerId, mealKey)}
+                        title="Delete all orders for this meal"
+                      >
+                        (delete)
+                      </button>
+                    </div>
+                    <table className="w-full mb-1" style={{ borderCollapse: "collapse" }}>
+                      <tbody>
+                        {/* Flatten orders to display individual items */}
+                        {orders.flatMap(order =>
+                          order.items.map((item, idx) => (
+                            <tr key={order.orderId + "-" + idx} style={{ border: "none" }}>
+                              <td
+                                className="py-1 px-1 text-gray-100"
+                                style={{ verticalAlign: "middle", width: "33%" }}
+                              >
+                                {item.name}
+                              </td>
+                              <td
+                                className="py-1 px-1 text-gray-100 text-center"
+                                style={{ verticalAlign: "middle", width: "33%" }}
+                              >
+                                {item.quantity}
+                              </td>
+                              <td
+                                className="py-1 px-1 text-gray-100 text-right"
+                                style={{ verticalAlign: "middle", width: "33%" }}
+                              >
+                                ₹{item.price * item.quantity}
+                              </td>
+                              {/* Button to remove a single item from an order */}
+                              <td className="py-1 px-1" style={{ width: "auto" }}>
+                                <button
+                                  className="text-red-400"
+                                  onClick={() => handleRemoveItem(customerId, order.orderId, idx)}
+                                  title="Remove item"
+                                >
+                                  ×
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+      </div>
     </div>
   );
 }
