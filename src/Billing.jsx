@@ -125,10 +125,8 @@ export default function BillingModule() {
   // Customer change with confirmation
   const handleCustomerChange = (id) => {
     if (selectedCustomer && selectedCustomer.id !== id) {
-      if (!window.confirm("Switching customer will clear the current billing. Continue?")) return;
       setSelectedItems([]);
       setDeliveryCharge(initialDeliveryCharge);
-      setOrderDate(initialOrderDate);
       setMealType("");
     }
     setSelectedCustomer(customers.find(c => c.id === id));
@@ -290,6 +288,18 @@ export default function BillingModule() {
         </Button>
       </div>
       <h2 className="text-xl font-bold mb-4 text-white text-center">Billing Module</h2>
+      <div>
+        <Label className="text-white">Date</Label>
+        <Input
+          type="date"
+          value={orderDate}
+          onChange={e =>{
+            if (!window.confirm("Are you sure you want to change the date?")) return;
+            setOrderDate(e.target.value)
+          }}
+          className="w-full p-3 rounded bg-[#23272f] text-white text-base"
+        />
+      </div>
       <div className="flex flex-col gap-2 bg-[#23272f] rounded-lg p-4">
         <Label className="text-white">Customer</Label>
         <Input
@@ -308,15 +318,6 @@ export default function BillingModule() {
             <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
           ))}
         </select>
-      </div>
-      <div>
-        <Label className="text-white">Date</Label>
-        <Input
-          type="date"
-          value={orderDate}
-          onChange={e => setOrderDate(e.target.value)}
-          className="w-full p-3 rounded bg-[#23272f] text-white text-base"
-        />
       </div>
       {selectedCustomer && (
         <div className="mb-4">
@@ -441,10 +442,26 @@ export default function BillingModule() {
 
       {/* Bill preview and controls */}
       {selectedCustomer && (
+        
         <div className="mt-4">
+          <div className="flex flex-col gap-2 mt-4">
+            <Button
+              className="w-full py-4 text-lg font-bold bg-green-700 text-white rounded-lg"
+              onClick={handleConfirmOrder}
+              disabled={menuError || menuLoading || !menuItems.length}
+            >
+              Confirm Order
+            </Button>
+            <Button
+              className="w-full py-4 text-lg font-bold bg-blue-700 text-white rounded-lg"
+              onClick={handleClearList}
+            >
+              Clear List
+            </Button>
+          </div>
           <div
             ref={billRef}
-            className="bg-white text-black rounded-lg shadow-lg p-4 max-w-xs mx-auto border font-mono text-xs"
+            className="bg-white text-black rounded-lg shadow-lg mt-2 p-4 max-w-xs mx-auto border font-mono text-xs"
             style={{ minWidth: 280, fontFamily: "monospace", position: "relative", overflow: "hidden" }}
           >
             <div className="flex flex-col items-center mb-2">
@@ -496,21 +513,6 @@ export default function BillingModule() {
             </div>
             <div className="text-center text-xs mt-4 italic">Thank you for dining with us!</div>
             <div className="absolute bottom-2 right-4 text-[10px] text-gray-400">Powered by Maa Inti Vanta</div>
-          </div>
-          <div className="flex flex-col gap-2 mt-4">
-            <Button
-              className="w-full py-4 text-lg font-bold bg-green-700 text-white rounded-lg"
-              onClick={handleConfirmOrder}
-              disabled={menuError || menuLoading || !menuItems.length}
-            >
-              Confirm Order
-            </Button>
-            <Button
-              className="w-full py-4 text-lg font-bold bg-blue-700 text-white rounded-lg"
-              onClick={handleClearList}
-            >
-              Clear List
-            </Button>
           </div>
         </div>
       )}
