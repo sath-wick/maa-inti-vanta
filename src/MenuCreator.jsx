@@ -50,6 +50,21 @@ export default function MenuCreator() {
     navigator.clipboard.writeText(text);
   };
 
+  const saveToFirebase = async () => {
+    if (!auth.currentUser) {
+      alert("❌ Please login to save changes.");
+      return;
+    }
+    const copy = { ...editableInventory };
+    if (!Array.isArray(copy.breakfast)) copy.breakfast = [];
+    if (!copy.lunchDinner) copy.lunchDinner = {};
+    const invRef = ref(database, "inventory");
+    await set(invRef, copy);
+    setInventory(copy);
+    setShowEditor(false);
+    };
+
+
   const addItem = (meal, value) => {
     if (meal === "breakfast") {
       const item = inventory.breakfast.find(i => i.name === value);
