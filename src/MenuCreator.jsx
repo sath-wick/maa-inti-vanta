@@ -12,6 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import Login from "./Login";
 
+// Alphabetical sort helper
+function sortByName(arr) {
+  return [...(arr || [])].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export default function MenuCreator() {
   const [inventory, setInventory] = useState({ breakfast: [], lunchDinner: {} });
   const [selected, setSelected] = useState({ breakfast: [], lunch: {}, dinner: {} });
@@ -25,7 +30,6 @@ export default function MenuCreator() {
 
   const subcategories = ["daal", "curry", "pickle", "sambar", "others"];
 
-  // Fetch inventory from Firebase
   useEffect(() => {
     const invRef = ref(database, "inventory");
     onValue(invRef, (snapshot) => {
@@ -119,13 +123,10 @@ export default function MenuCreator() {
     setEditableInventory(copy);
   };
 
-  // Flatten lunch/dinner for saving menu
   const flattenLunchDinner = mealObj =>
     subcategories.flatMap(sub => mealObj[sub] || []);
 
-  // Combined Generate Message & Save Menu
   const generateMessageAndSaveMenu = async () => {
-    // Message generation logic
     const deliveryDay = format(new Date(deliveryDate), "dd/MMMM/yyyy");
     const formatEnglishSection = (emoji, title, items, deadline, dateLabel) => {
       const lines = Object.entries(items)
@@ -148,24 +149,23 @@ export default function MenuCreator() {
     const englishMsg =
       `🍽️ *Maa Inti Vanta - just for you*\n\n` +
       `Please select the items you'd like to receive.\n📅 *Delivery Date:*\n ${deliveryDay}` +
-      formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "10:00 PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
-      formatEnglishSection("🍚", "Lunch", selected.lunch, "08:00 AM", deliveryDay) +
-      formatEnglishSection("🌙", "Dinner", selected.dinner, "03:00 PM", deliveryDay) +
+      formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "06:00 AM", deliveryDay) +
+      formatEnglishSection("🍚", "Lunch", selected.lunch, "09:00 AM", deliveryDay) +
+      formatEnglishSection("🌙", "Dinner", selected.dinner, "05:00 PM", deliveryDay) +
       `\n\n🚚 *Delivery Timings:*\n🌞Breakfast: 07:30 - 08:30 AM\n🍚Lunch: 12:30 - 01:30 PM\n🌙Dinner: 08:00 - 09:00 PM\n\n` +
       `📦 *Delivery Charges:*\nWithin 3 Km – ₹30\n3 Km to 6 Km – ₹60\n\nThank you!`;
     const teluguMsg =
       `🍲 మీ కోసం – *మా ఇంటి వంట!*\n\n` +
       `దయచేసి మీకు కావాల్సిన వంటలు ఎంచుకోండి.\n\n📅 *డెలివరీ తేదీ:*\n *${deliveryDay}*\n` +
-      formatTeluguSection("🌞", "*టిఫిన్*", { breakfast: selected.breakfast }, "10:00 PM", format(new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() - 1)), "dd/MMMM/yyyy")) +
-      formatTeluguSection("🍚", "*మధ్యాహ్న భోజనం*", selected.lunch, "08:00AM", deliveryDay) +
-      formatTeluguSection("🌙", "*రాత్రి భోజనం*", selected.dinner, "03:00PM", deliveryDay) +
+      formatTeluguSection("🌞", "*టిఫిన్*", { breakfast: selected.breakfast }, "06:00 AM", deliveryDay) +
+      formatTeluguSection("🍚", "*మధ్యాహ్న భోజనం*", selected.lunch, "09:00AM", deliveryDay) +
+      formatTeluguSection("🌙", "*రాత్రి భోజనం*", selected.dinner, "05:00PM", deliveryDay) +
       `\n\n🚚 *డెలివరీ సమయం*:\n🌞టిఫిన్: 07:30 - 08:30 AM\n🍚మధ్యాహ్న భోజనం: 12:30 - 01:30 PM\n🌙రాత్రి భోజనం: 08:00 - 09:00 PM\n\n` +
       `*డెలివరి ఛార్జ్ (3 Km లోపు): ₹30 రూపాయలు*.\n*డెలివరి ఛార్జ్ (3 Km - 6 Km): ₹60 రూపాయలు*\n\n` +
       `ధన్యవాదాలు`;
     setGeneratedMsg(englishMsg);
     setGeneratedTeluguMsg(teluguMsg);
 
-    // Save menu to Firebase
     if (!auth.currentUser) {
       alert("❌ Please login to save menu.");
       return;
@@ -178,7 +178,6 @@ export default function MenuCreator() {
     };
     await update(menuRef, menuData);
 
-    // Clear all selections
     setSelected({ breakfast: [], lunch: {}, dinner: {} });
 
     alert("✅ Menu generated and saved for " + deliveryDate);
@@ -209,7 +208,7 @@ export default function MenuCreator() {
               value=""
             >
               <option disabled value="">-- select item --</option>
-              {(inventory.breakfast ?? []).map(item => (
+              {sortByName(inventory.breakfast ?? []).map(item => (
                 <option key={item.name} value={item.name}>{item.name}</option>
               ))}
             </select>
@@ -240,7 +239,7 @@ export default function MenuCreator() {
                   value=""
                 >
                   <option disabled value="">-- select item --</option>
-                  {(inventory.lunchDinner?.[sub] ?? []).map(item => (
+                  {sortByName(inventory.lunchDinner?.[sub] ?? []).map(item => (
                     <option key={item.name} value={`${sub}::${item.name}`}>{item.name}</option>
                   ))}
                 </select>
@@ -273,7 +272,7 @@ export default function MenuCreator() {
                   value=""
                 >
                   <option disabled value="">-- select item --</option>
-                  {(inventory.lunchDinner?.[sub] ?? []).map(item => (
+                  {sortByName(inventory.lunchDinner?.[sub] ?? []).map(item => (
                     <option key={item.name} value={`${sub}::${item.name}`}>{item.name}</option>
                   ))}
                 </select>
