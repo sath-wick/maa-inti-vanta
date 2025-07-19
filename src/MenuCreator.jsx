@@ -17,10 +17,11 @@ function sortByName(arr) {
   return [...(arr || [])].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// -- Main component
 export default function MenuCreator() {
   const [inventory, setInventory] = useState({ breakfast: [], lunchDinner: {} });
   const [selected, setSelected] = useState({ breakfast: [], lunch: {}, dinner: {} });
-  const [deliveryDate, setDeliveryDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [deliveryDate, setDeliveryDate] = useState(""); // 🔑 initially empty
   const [generatedMsg, setGeneratedMsg] = useState("");
   const [generatedTeluguMsg, setGeneratedTeluguMsg] = useState("");
   const [showEditor, setShowEditor] = useState(false);
@@ -62,8 +63,7 @@ export default function MenuCreator() {
     await set(invRef, copy);
     setInventory(copy);
     setShowEditor(false);
-    };
-
+  };
 
   const addItem = (meal, value) => {
     if (meal === "breakfast") {
@@ -106,7 +106,6 @@ export default function MenuCreator() {
     }
   };
 
-  // Inventory editing helpers (unchanged)
   const updateNestedItem = (tab, sub, index, field, value) => {
     const copy = { ...editableInventory };
     if (tab === "breakfast") {
@@ -192,9 +191,7 @@ export default function MenuCreator() {
       dinner: flattenLunchDinner(selected.dinner).map(({ name, price }) => ({ name, price }))
     };
     await update(menuRef, menuData);
-
     setSelected({ breakfast: [], lunch: {}, dinner: {} });
-
     alert("✅ Menu generated and saved for " + deliveryDate);
   };
 
@@ -208,112 +205,118 @@ export default function MenuCreator() {
       </div>
       <div>
         <Label>Delivery Date</Label>
-        <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
+        <Input
+          type="date"
+          value={deliveryDate}
+          onChange={e => setDeliveryDate(e.target.value)}
+        />
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Breakfast */}
-        <Card className="bg-gray-800 border border-gray-700 text-gray-100">
-          <CardContent className="space-y-2 p-4">
-            <h2 className="text-xl font-semibold capitalize">Breakfast</h2>
-            <Label>Select Items</Label>
-            <select
-              className="w-full bg-gray-700 text-gray-100 border border-gray-600 rounded-lg p-2"
-              onChange={e => addItem("breakfast", e.target.value)}
-              value=""
-            >
-              <option disabled value="">-- select item --</option>
-              {sortByName(inventory.breakfast ?? []).map(item => (
-                <option key={item.name} value={item.name}>{item.name}</option>
-              ))}
-            </select>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {(selected.breakfast ?? []).map(item => (
-                <span
-                  key={item.name}
-                  className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm cursor-pointer hover:bg-blue-500"
-                  onClick={() => removeItem("breakfast", "", item.name)}
-                >
-                  {item.name} ×
-                </span>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Lunch */}
-        <Card className="bg-gray-800 border border-gray-700 text-gray-100">
-          <CardContent className="space-y-2 p-4">
-            <h2 className="text-xl font-semibold capitalize">Lunch</h2>
-            {subcategories.map(sub => (
-              <div key={sub}>
-                <Label>Select {sub.charAt(0).toUpperCase() + sub.slice(1)}</Label>
-                <select
-                  className="w-full bg-gray-700 text-gray-100 border border-gray-600 rounded-lg p-2"
-                  onChange={e => addItem("lunch", e.target.value)}
-                  value=""
-                >
-                  <option disabled value="">-- select item --</option>
-                  {sortByName(inventory.lunchDinner?.[sub] ?? []).map(item => (
-                    <option key={item.name} value={`${sub}::${item.name}`}>{item.name}</option>
-                  ))}
-                </select>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {(selected.lunch?.[sub] ?? []).map(item => (
-                    <span
-                      key={item.name}
-                      className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm cursor-pointer hover:bg-blue-500"
-                      onClick={() => removeItem("lunch", sub, item.name)}
-                    >
-                      {item.name} ×
-                    </span>
-                  ))}
-                </div>
+      {/* ONLY show menu section once a date is selected */}
+      {deliveryDate && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Breakfast */}
+          <Card className="bg-gray-800 border border-gray-700 text-gray-100">
+            <CardContent className="space-y-2 p-4">
+              <h2 className="text-xl font-semibold capitalize">Breakfast</h2>
+              <Label>Select Items</Label>
+              <select
+                className="w-full bg-gray-700 text-gray-100 border border-gray-600 rounded-lg p-2"
+                onChange={e => addItem("breakfast", e.target.value)}
+                value=""
+              >
+                <option disabled value="">-- select item --</option>
+                {sortByName(inventory.breakfast ?? []).map(item => (
+                  <option key={item.name} value={item.name}>{item.name}</option>
+                ))}
+              </select>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {(selected.breakfast ?? []).map(item => (
+                  <span
+                    key={item.name}
+                    className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm cursor-pointer hover:bg-blue-500"
+                    onClick={() => removeItem("breakfast", "", item.name)}
+                  >
+                    {item.name} ×
+                  </span>
+                ))}
               </div>
-            ))}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Dinner */}
-        <Card className="bg-gray-800 border border-gray-700 text-gray-100">
-          <CardContent className="space-y-2 p-4">
-            <h2 className="text-xl font-semibold capitalize">Dinner</h2>
-            {subcategories.map(sub => (
-              <div key={sub}>
-                <Label>Select {sub.charAt(0).toUpperCase() + sub.slice(1)}</Label>
-                <select
-                  className="w-full bg-gray-700 text-gray-100 border border-gray-600 rounded-lg p-2"
-                  onChange={e => addItem("dinner", e.target.value)}
-                  value=""
-                >
-                  <option disabled value="">-- select item --</option>
-                  {sortByName(inventory.lunchDinner?.[sub] ?? []).map(item => (
-                    <option key={item.name} value={`${sub}::${item.name}`}>{item.name}</option>
-                  ))}
-                </select>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {(selected.dinner?.[sub] ?? []).map(item => (
-                    <span
-                      key={item.name}
-                      className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm cursor-pointer hover:bg-blue-500"
-                      onClick={() => removeItem("dinner", sub, item.name)}
-                    >
-                      {item.name} ×
-                    </span>
-                  ))}
+          {/* Lunch */}
+          <Card className="bg-gray-800 border border-gray-700 text-gray-100">
+            <CardContent className="space-y-2 p-4">
+              <h2 className="text-xl font-semibold capitalize">Lunch</h2>
+              {subcategories.map(sub => (
+                <div key={sub}>
+                  <Label>Select {sub.charAt(0).toUpperCase() + sub.slice(1)}</Label>
+                  <select
+                    className="w-full bg-gray-700 text-gray-100 border border-gray-600 rounded-lg p-2"
+                    onChange={e => addItem("lunch", e.target.value)}
+                    value=""
+                  >
+                    <option disabled value="">-- select item --</option>
+                    {sortByName(inventory.lunchDinner?.[sub] ?? []).map(item => (
+                      <option key={item.name} value={`${sub}::${item.name}`}>{item.name}</option>
+                    ))}
+                  </select>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {(selected.lunch?.[sub] ?? []).map(item => (
+                      <span
+                        key={item.name}
+                        className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm cursor-pointer hover:bg-blue-500"
+                        onClick={() => removeItem("lunch", sub, item.name)}
+                      >
+                        {item.name} ×
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+              ))}
+            </CardContent>
+          </Card>
 
-      {/* One Button: Generate Message & Save Menu */}
+          {/* Dinner */}
+          <Card className="bg-gray-800 border border-gray-700 text-gray-100">
+            <CardContent className="space-y-2 p-4">
+              <h2 className="text-xl font-semibold capitalize">Dinner</h2>
+              {subcategories.map(sub => (
+                <div key={sub}>
+                  <Label>Select {sub.charAt(0).toUpperCase() + sub.slice(1)}</Label>
+                  <select
+                    className="w-full bg-gray-700 text-gray-100 border border-gray-600 rounded-lg p-2"
+                    onChange={e => addItem("dinner", e.target.value)}
+                    value=""
+                  >
+                    <option disabled value="">-- select item --</option>
+                    {sortByName(inventory.lunchDinner?.[sub] ?? []).map(item => (
+                      <option key={item.name} value={`${sub}::${item.name}`}>{item.name}</option>
+                    ))}
+                  </select>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {(selected.dinner?.[sub] ?? []).map(item => (
+                      <span
+                        key={item.name}
+                        className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm cursor-pointer hover:bg-blue-500"
+                        onClick={() => removeItem("dinner", sub, item.name)}
+                      >
+                        {item.name} ×
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Generate & Save, Edit Inventory, Generated Messages, Inventory Dialog remain the same */}
+
       <Button className="mt-4" onClick={generateMessageAndSaveMenu}>
         Generate Message & Save Menu
       </Button>
 
-      {/* Edit Inventory Button */}
       <Button variant="outline" onClick={() => {
         const copy = JSON.parse(JSON.stringify(inventory));
         if (!Array.isArray(copy.breakfast)) copy.breakfast = [];
@@ -322,7 +325,6 @@ export default function MenuCreator() {
         setShowEditor(true);
       }}>Edit Inventory</Button>
 
-      {/* Generated Messages */}
       {generatedMsg && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -342,7 +344,6 @@ export default function MenuCreator() {
         </div>
       )}
 
-      {/* Edit Inventory Dialog */}
       <Dialog open={showEditor} onOpenChange={setShowEditor}>
         <DialogContent>
           <h2 className="text-xl font-bold mb-4">Edit Inventory</h2>
@@ -351,7 +352,6 @@ export default function MenuCreator() {
               <TabsTrigger value="breakfast">Breakfast</TabsTrigger>
               <TabsTrigger value="lunchDinner">Lunch & Dinner</TabsTrigger>
             </TabsList>
-            {/* Breakfast Tab */}
             <TabsContent value="breakfast">
               <div className="space-y-2">
                 {(editableInventory.breakfast ?? []).map((item, idx) => (
@@ -377,7 +377,6 @@ export default function MenuCreator() {
                 <Button onClick={() => addNestedItem("breakfast", "")}>➕ Add Item</Button>
               </div>
             </TabsContent>
-            {/* Lunch & Dinner Tab */}
             <TabsContent value="lunchDinner">
               {subcategories.map(sub => (
                 <div key={sub} className="space-y-2">
@@ -407,9 +406,7 @@ export default function MenuCreator() {
               ))}
             </TabsContent>
           </Tabs>
-          <Button className="mt-4" onClick={async () => {
-            await saveToFirebase();
-          }}>💾 Save</Button>
+          <Button className="mt-4" onClick={saveToFirebase}>💾 Save</Button>
           <Button variant="outline" className="mt-2" onClick={() => setShowEditor(false)}>❌ Cancel</Button>
         </DialogContent>
       </Dialog>

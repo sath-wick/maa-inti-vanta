@@ -9,6 +9,7 @@ import Billing from './Billing'
 import CustomerHistory from "./CustomerHistory";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import Dashboards from "./Dashboards";
 
 function Homepage() {
   return (
@@ -49,6 +50,14 @@ function Homepage() {
             </CardContent>
           </Card>
         </Link>
+        <Link to="/dashboards" className="block ">
+          <Card className="transition-transform hover:scale-105 shadow-lg cursor-pointer">
+            <CardContent className="flex flex-col items-center p-8">
+              <span className="text-5xl mb-4">📄</span>
+              <span className="text-2xl font-semibold">Dashboards</span>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
       <Button
         variant="outline"
@@ -78,6 +87,7 @@ export default function App() {
       <Route path="/customers" element={<CustomerManager />} />
       <Route path="/billing" element={<Billing />} />
       <Route path="/customer-history" element={<CustomerHistory />} />
+      <Route path="/dashboards" element={<Dashboards />} />
     </Routes>
   );
 }
