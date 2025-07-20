@@ -55,35 +55,43 @@ export default function Dashboards() {
   };
 
   filteredOrders.forEach(order => {
-    const { mealType, items, customerName, deliveryCharges = 0, grandTotal = 0 } = order;
+  const { mealType, items = [], customerName = "Unknown", deliveryCharges = 0, grandTotal = 0 } = order;
 
-    // Cooking dashboard aggregation
-    items.forEach(item => {
-      if (!cookingDashboard[mealType][item.name]) {
-        cookingDashboard[mealType][item.name] = 0;
-      }
-      cookingDashboard[mealType][item.name] += item.quantity;
-    });
+  if (!["breakfast", "lunch", "dinner"].includes(mealType)) {
+    console.warn(`Skipping unknown mealType: ${mealType}`);
+    return; // skip unrecognized mealTypes
+  }
 
-    // Packaging dashboard aggregation
-    if (!packagingDashboard[mealType][customerName]) {
-      packagingDashboard[mealType][customerName] = {
-        itemMap: {},
-        deliveryCharges,
-        grandTotal
-      };
+  // 🛠️ Ensure meal key exists
+  if (!cookingDashboard[mealType]) cookingDashboard[mealType] = {};
+  if (!packagingDashboard[mealType]) packagingDashboard[mealType] = {};
+
+  // Cooking dashboard aggregation
+  items.forEach(item => {
+    if (!cookingDashboard[mealType][item.name]) {
+      cookingDashboard[mealType][item.name] = 0;
     }
-
-    items.forEach(item => {
-      if (!packagingDashboard[mealType][customerName].itemMap[item.name]) {
-        packagingDashboard[mealType][customerName].itemMap[item.name] = {
-          quantity: 0,
-          price: item.price
-        };
-      }
-      packagingDashboard[mealType][customerName].itemMap[item.name].quantity += item.quantity;
-    });
+    cookingDashboard[mealType][item.name] += item.quantity;
   });
+
+  // Packaging
+  if (!packagingDashboard[mealType][customerName]) {
+    packagingDashboard[mealType][customerName] = {
+      itemMap: {},
+      deliveryCharges,
+      grandTotal
+    };
+  }
+
+  items.forEach(item => {
+    const itemMap = packagingDashboard[mealType][customerName].itemMap;
+    if (!itemMap[item.name]) {
+      itemMap[item.name] = { quantity: 0, price: item.price || 0 };
+    }
+    itemMap[item.name].quantity += item.quantity;
+  });
+});
+
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6 text-white">

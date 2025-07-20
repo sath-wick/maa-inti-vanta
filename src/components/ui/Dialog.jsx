@@ -9,7 +9,7 @@ function Dialog({ open, onClose, children }) {
       onClick={onClose}
     >
       <div
-        className="bg-white text-black rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-[#1f2931] text-white rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {children}

@@ -33,42 +33,45 @@ export default function OrderHistorySummary() {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [editingOrders, setEditingOrders] = useState([]);
 
-  const fetchOrders = () => {
+  useEffect(() => {
     const ordersRef = ref(database, "customerOrderHistory");
-    onValue(ordersRef, (snap) => {
+
+    const unsubscribe = onValue(ordersRef, (snap) => {
       const data = snap.val() || {};
       const list = [];
 
       Object.entries(data).forEach(([customerId, customerNode]) => {
-        if (!customerNode.orders) return;
-
-        Object.entries(customerNode.orders).forEach(([orderId, order]) => {
+        const ordersObj = customerNode.orders || {};
+        Object.entries(ordersObj).forEach(([orderId, order]) => {
           list.push({
             ...order,
             customerId,
             orderId,
             customerName: order.customerName || "Unknown",
+            items: order.items || [],
           });
         });
       });
 
       setOrders(list);
     });
-  };
 
-  useEffect(() => {
-    fetchOrders();
+    return () => unsubscribe();
   }, []);
 
   const filteredOrders = selectedDate
     ? orders.filter((o) => o.date === toYYYYMMDD(selectedDate))
     : orders;
 
-  // Group by customer
   const customerMap = {};
   filteredOrders.forEach((order) => {
     const id = order.customerId;
-    if (!customerMap[id]) customerMap[id] = { name: order.customerName, orders: [] };
+    if (!customerMap[id]) {
+      customerMap[id] = {
+        name: order.customerName,
+        orders: [],
+      };
+    }
     customerMap[id].orders.push(order);
   });
 
@@ -79,16 +82,19 @@ export default function OrderHistorySummary() {
       : allOrders;
 
     setEditingCustomer({ id: customerId, name: allOrders[0]?.customerName || "Unknown" });
-    setEditingOrders(editable);
+    setEditingOrders([...editable.map((o) => ({ ...o, items: o.items || [] }))]);
     setEditDialogOpen(true);
   };
 
   const handleItemChange = (orderId, index, field, value) => {
     const newOrders = editingOrders.map((o) => {
       if (o.orderId !== orderId) return o;
-      const newItems = [...o.items];
-      newItems[index] = { ...newItems[index], [field]: field === "price" || field === "quantity" ? Number(value) : value };
-      return { ...o, items: newItems };
+      const items = [...(o.items || [])];
+      items[index] = {
+        ...items[index],
+        [field]: field === "price" || field === "quantity" ? Number(value) : value,
+      };
+      return { ...o, items };
     });
     setEditingOrders(newOrders);
   };
@@ -98,7 +104,7 @@ export default function OrderHistorySummary() {
       if (o.orderId !== orderId) return o;
       return {
         ...o,
-        items: [...o.items, { name: "", price: 0, quantity: 1 }],
+        items: [...(o.items || []), { name: "", price: 0, quantity: 1 }],
       };
     });
     setEditingOrders(newOrders);
@@ -107,9 +113,9 @@ export default function OrderHistorySummary() {
   const handleRemoveItem = (orderId, index) => {
     const newOrders = editingOrders.map((o) => {
       if (o.orderId !== orderId) return o;
-      const newItems = [...o.items];
-      newItems.splice(index, 1);
-      return { ...o, items: newItems };
+      const items = [...(o.items || [])];
+      items.splice(index, 1);
+      return { ...o, items };
     });
     setEditingOrders(newOrders);
   };
@@ -125,12 +131,17 @@ export default function OrderHistorySummary() {
   const handleSaveUpdates = async () => {
     const updates = {};
     editingOrders.forEach((order) => {
-      const grandTotal = order.items.reduce((t, i) => t + i.price * i.quantity, 0) + (Number(order.deliveryCharges) || 0);
+      const grandTotal =
+        (order.items || []).reduce(
+          (sum, i) => sum + i.price * i.quantity,
+          0
+        ) + Number(order.deliveryCharges || 0);
       updates[`customerOrderHistory/${order.customerId}/orders/${order.orderId}`] = {
         ...order,
         grandTotal,
       };
     });
+
     await update(ref(database), updates);
     setEditDialogOpen(false);
   };
@@ -168,20 +179,29 @@ export default function OrderHistorySummary() {
               <h2 className="text-lg font-bold">{cust.name}</h2>
               <Button onClick={() => handleEdit(customerId)}>✏️ Edit</Button>
             </div>
-            {cust.orders.map((order) => (
-              <div key={order.orderId} className="mb-2 text-sm border-b border-gray-600 pb-2">
+            {(cust.orders || []).map((order) => (
+              <div
+                key={order.orderId}
+                className="mb-2 text-sm border-b border-gray-600 pb-2"
+              >
                 <div className="mb-1">
-                  <strong>{mealLabels[order.mealType]}</strong> | {toDDMMYYYY(order.date)}
+                  <strong>{mealLabels[order.mealType]}</strong> |{" "}
+                  {toDDMMYYYY(order.date)}
                 </div>
                 <ul className="list-disc ml-4">
-                  {order.items.map((i, idx) => (
+                  {(order.items || []).map((i, idx) => (
                     <li key={idx}>
-                      {i.name} - ₹{i.price} x {i.quantity} = ₹{i.price * i.quantity}
+                      {i.name} - ₹{i.price} x {i.quantity} = ₹
+                      {i.price * i.quantity}
                     </li>
                   ))}
                 </ul>
-                <div className="text-sm mt-1">Delivery: ₹{order.deliveryCharges}</div>
-                <div className="text-sm font-bold">Total: ₹{order.grandTotal}</div>
+                <div className="text-sm mt-1">
+                  Delivery: ₹{order.deliveryCharges}
+                </div>
+                <div className="text-sm font-bold">
+                  Total: ₹{order.grandTotal}
+                </div>
               </div>
             ))}
           </div>
@@ -189,10 +209,12 @@ export default function OrderHistorySummary() {
 
       {/* ✏️ Edit Modal */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="bg-[#23272f] text-white">
-          <h2 className="text-lg font-bold mb-3">Edit Orders - {editingCustomer?.name}</h2>
+        <DialogContent className="bg-[#23272f] text-white max-h-screen overflow-y-scroll">
+          <h2 className="text-lg font-bold mb-3">
+            Edit Orders - {editingCustomer?.name}
+          </h2>
 
-          {editingOrders.map((order) => (
+          {(editingOrders || []).map((order) => (
             <div key={order.orderId} className="mb-4 border-b border-gray-600">
               <h3 className="font-semibold mb-2">
                 {mealLabels[order.mealType]} | {toDDMMYYYY(order.date)}
@@ -207,7 +229,7 @@ export default function OrderHistorySummary() {
                   </tr>
                 </thead>
                 <tbody>
-                  {order.items.map((item, index) => (
+                  {(order.items || []).map((item, index) => (
                     <tr key={index}>
                       <td>
                         <Input
@@ -240,8 +262,8 @@ export default function OrderHistorySummary() {
                       </td>
                       <td>
                         <button
-                          onClick={() => handleRemoveItem(order.orderId, index)}
                           className="text-red-500"
+                          onClick={() => handleRemoveItem(order.orderId, index)}
                         >
                           ❌
                         </button>
