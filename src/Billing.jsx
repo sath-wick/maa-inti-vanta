@@ -164,18 +164,18 @@ export default function BillingModule() {
       return;
     }
     const orderData = {
-      date: orderDate,
-      mealType,
-      deliveryCharges: deliveryCharge,
-      customerName: selectedCustomer.name,
-      grandTotal,
-      items: selectedItems.map(({ name, teluguName, price, quantity }) => ({
-        name,
-        teluguName,
-        price,
-        quantity,
-      })),
-    };
+    date: orderDate,
+    mealType,
+    deliveryCharges: deliveryCharge,
+    customerName: selectedCustomer.name,
+    grandTotal,
+    items: selectedItems.map(({ name, price, quantity }) => ({
+      name,
+      price: String(price),  // keep price as string to match DB
+      quantity,
+    })),
+  };
+
     await push(ref(database, `customerOrderHistory/${selectedCustomer.id}/orders`), orderData);
     if (billRef.current) {
       const canvas = await html2canvas(billRef.current);
