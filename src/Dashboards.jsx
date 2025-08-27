@@ -156,7 +156,7 @@ export default function Dashboards() {
                 {Object.entries(cookingDashboard[selectedMealType]).map(
                   ([itemName, qty]) => (
                     <li key={itemName}>
-                      {itemName} - {qty}
+                      {itemName} - <b>{qty}</b>
                     </li>
                   )
                 )}
@@ -181,16 +181,11 @@ export default function Dashboards() {
                       {Object.entries(info.itemMap).map(
                         ([item, { quantity, price }]) => (
                           <li key={item}>
-                            {item} - ₹{price} × {quantity} = ₹{price * quantity}
+                            {item} × <b>{quantity}</b>
                           </li>
                         )
                       )}
                     </ul>
-                    <div className="text-sm ml-2 mt-1">
-                      Delivery Charges: ₹{info.deliveryCharges}
-                      <br />
-                      Grand Total: <b>₹{info.grandTotal}</b>
-                    </div>
                   </div>
                 )
               )
