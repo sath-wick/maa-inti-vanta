@@ -497,6 +497,63 @@ export default function BillingModule() {
           </div>
         </div>
         )}
+    {showNewCustomerModal && (
+  <Dialog open onOpenChange={(v) => setShowNewCustomerModal(v)}>
+    <DialogContent className="bg-[#23272f] text-white p-6 rounded max-w-xs mx-auto">
+      <h2 className="text-xl font-bold mb-4">Add New Customer</h2>
+      <div className="space-y-3">
+        <div>
+          <Label>Name</Label>
+          <Input
+            value={newCustomer.name}
+            onChange={e => setNewCustomer((c) => ({ ...c, name: e.target.value }))}
+            className="bg-[#181c23] text-white"
+          />
+        </div>
+        <div>
+          <Label>Phone</Label>
+          <Input
+            value={newCustomer.phone}
+            onChange={e => setNewCustomer((c) => ({ ...c, phone: e.target.value }))}
+            className="bg-[#181c23] text-white"
+          />
+        </div>
+        <div>
+          <Label>Address</Label>
+          <Input
+            value={newCustomer.address}
+            onChange={e => setNewCustomer((c) => ({ ...c, address: e.target.value }))}
+            className="bg-[#181c23] text-white"
+          />
+        </div>
+        <div className="flex gap-2 mt-3">
+          <Button
+            className="bg-green-700 w-full"
+            onClick={async () => {
+              if(!newCustomer.name || !newCustomer.phone) {
+                alert("Name and phone are required");
+                return;
+              }
+              const res = await push(ref(database, "customers"), newCustomer);
+              // select the newly added customer and reset modal
+              setSelectedCustomer({ id: res.key, ...newCustomer });
+              setShowNewCustomerModal(false);
+              setNewCustomer({ name: "", phone: "", address: "" });
+            }}
+          >
+            Add Customer
+          </Button>
+          <Button
+            className="bg-gray-700 w-full"
+            onClick={() => setShowNewCustomerModal(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
+)}
 
     </div>
   );

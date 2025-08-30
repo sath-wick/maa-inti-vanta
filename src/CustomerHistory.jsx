@@ -12,23 +12,21 @@ const mealLabels = {
   lunch: "Lunch",
   dinner: "Dinner",
   bakery: "Bakery",
+  misc: "Misc",
 };
 
-// Defensive parse helper
 const safeParse = (value, fmt) => {
   if (!value) return null;
   const d = parse(value, fmt, new Date());
   return isNaN(d.getTime()) ? null : d;
 };
 
-// Format date yyyy-MM-dd → dd-MM-yyyy
 const toDDMMYYYY = (dateStr) => {
   const d = safeParse(dateStr, "yyyy-MM-dd");
   if (!d) return "";
   return format(d, "dd-MM-yyyy");
 };
 
-// Format date dd-MM-yyyy → yyyy-MM-dd
 const toYYYYMMDD = (dateStr) => {
   const d = safeParse(dateStr, "dd-MM-yyyy");
   if (!d) return "";
@@ -52,8 +50,14 @@ export default function OrderHistorySummary() {
       Object.entries(data).forEach(([customerId, customerNode]) => {
         const ordersObj = customerNode.orders || {};
         Object.entries(ordersObj).forEach(([orderId, order]) => {
+          // Force mealType to 'misc' for custom menu orders (not standard)
+          let mealType = order.mealType;
+          if (!["breakfast", "lunch", "dinner", "bakery"].includes(mealType)) {
+            mealType = "misc";
+          }
           list.push({
             ...order,
+            mealType,
             customerId,
             orderId,
             customerName: order.customerName || "Unknown",
@@ -70,14 +74,13 @@ export default function OrderHistorySummary() {
     ? orders.filter((o) => o.date === selectedDate)
     : orders;
 
-  // Summary calculation
-  const summaryMeals = { breakfast: {}, lunch: {}, dinner: {}, bakery: {} };
-  const mealTotals = { breakfast: 0, lunch: 0, dinner: 0, bakery: 0 };
-  const deliveryTotals = { breakfast: 0, lunch: 0, dinner: 0, bakery: 0 };
+  const summaryMeals = { breakfast: {}, lunch: {}, dinner: {}, bakery: {}, misc: {} };
+  const mealTotals = { breakfast: 0, lunch: 0, dinner: 0, bakery: 0, misc: 0 };
+  const deliveryTotals = { breakfast: 0, lunch: 0, dinner: 0, bakery: 0, misc: 0 };
 
   filteredOrders.forEach((order) => {
     const { mealType, items = [], deliveryCharges = 0 } = order;
-    if (!["breakfast", "lunch", "dinner", "bakery"].includes(mealType)) return;
+    if (!summaryMeals.hasOwnProperty(mealType)) return;
 
     items.forEach((item) => {
       if (!summaryMeals[mealType][item.name]) {
@@ -95,7 +98,6 @@ export default function OrderHistorySummary() {
   const totalDeliveryTotal = Object.values(deliveryTotals).reduce((a, b) => a + b, 0);
   const grandTotal = totalMealsTotal + totalDeliveryTotal;
 
-  // Group orders by customer
   const customerMap = {};
   filteredOrders.forEach((order) => {
     const id = order.customerId;
@@ -108,7 +110,6 @@ export default function OrderHistorySummary() {
     customerMap[id].orders.push(order);
   });
 
-  // Delete orders function from main list
   const handleDelete = async (customerId) => {
     const customerOrders = orders.filter((o) => o.customerId === customerId);
     let toDeleteOrderKeys = [];
@@ -146,7 +147,6 @@ export default function OrderHistorySummary() {
     }
   };
 
-  // Edit modal support functions
   const handleEdit = (customerId) => {
     const allOrders = orders.filter((o) => o.customerId === customerId);
     const editable = selectedDate
@@ -210,14 +210,12 @@ export default function OrderHistorySummary() {
     );
   };
 
-  // Delete all orders of a meal type within editing state
   const handleDeleteAllMealOrders = (mealTypeToDelete) => {
     setEditingOrders((orders) =>
       orders.filter((order) => order.mealType !== mealTypeToDelete)
     );
   };
 
-  // Save all changes to Firebase
   const handleSaveUpdates = async () => {
     const updates = {};
     editingOrders.forEach((order) => {
@@ -237,7 +235,6 @@ export default function OrderHistorySummary() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto text-white space-y-8 bg-[#181c23] rounded-lg">
-      {/* FILTER and SEARCH */}
       <div className="flex flex-col md:flex-row gap-3 items-center">
         <Label>Select Date:</Label>
         <Input
@@ -254,7 +251,6 @@ export default function OrderHistorySummary() {
         </Button>
       </div>
 
-      {/* SUMMARY SECTION */}
       <div>
         <h2 className="text-xl font-bold mb-2">Summary</h2>
         {Object.entries(mealLabels).map(([mealKey, mealLabel]) => (
@@ -310,7 +306,6 @@ export default function OrderHistorySummary() {
         </div>
       </div>
 
-      {/* SEARCH */}
       <div>
         <Label>Search Customer</Label>
         <Input
@@ -321,7 +316,6 @@ export default function OrderHistorySummary() {
         />
       </div>
 
-      {/* CUSTOMER ORDER LIST */}
       {Object.entries(customerMap)
         .filter(([_, c]) => c.name && c.name.toLowerCase().includes(search.toLowerCase()))
         .map(([customerId, cust]) => (
@@ -357,14 +351,13 @@ export default function OrderHistorySummary() {
           </div>
         ))}
 
-      {/* EDIT MODAL */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="bg-[#23272f] text-white max-h-screen overflow-y-scroll">
           <h2 className="text-lg font-bold mb-3">
             Edit Orders - {editingCustomer?.name}
           </h2>
 
-          {["breakfast", "lunch", "dinner", "bakery"].map((mealKey) => {
+          {["breakfast", "lunch", "dinner", "bakery", "misc"].map((mealKey) => {
             const ordersForMeal = editingOrders.filter((o) => o.mealType === mealKey);
             if (ordersForMeal.length === 0) return null;
 
@@ -402,6 +395,7 @@ export default function OrderHistorySummary() {
                         <option value="lunch">Lunch</option>
                         <option value="dinner">Dinner</option>
                         <option value="bakery">Bakery</option>
+                        <option value="misc">Misc</option>
                       </select>
                     </div>
 
