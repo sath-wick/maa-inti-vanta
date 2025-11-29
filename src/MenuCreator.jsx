@@ -138,14 +138,14 @@ export default function MenuCreator() {
 
   const teluguMealsMsg =
     `🍲 మా ఇంటి వంట మీకు!\n\n📅 డెలివరీ తేదీ:\n ${deliveryDay}` +
-    formatTeluguSection("🌞", "టిఫిన్", { breakfast: selected.breakfast }, "06:00 AM", deliveryDay) +
+    formatTeluguSection("🌞", "టిఫిన్", { breakfast: selected.breakfast }, "08:30 AM", deliveryDay) +
     formatTeluguSection("🍚", "మధ్యాహ్న భోజనం", selected.lunch, "09:00 AM", deliveryDay) +
     formatTeluguSection("🌙", "రాత్రి భోజనం", selected.dinner, "05:00 PM", deliveryDay) +
     `\n\n🚚 డెలివరీ సమయాలు:\n🌞 టిఫిన్: 07:30 - 08:30 AM\n🍚 మధ్యాహ్న భోజనం: 12:30 - 01:30 PM\n🌙 రాత్రి భోజనం: 08:00 - 09:00 PM\n\n📦 డెలివరీ ఛార్జీలు:\n3 కి.మీ లోపు – ₹30\n3 కి.మీ - 6 కి.మీ – ₹60\n\nధన్యవాదాలు!`;
 
   const englishMealsMsg =
     `🍽️ *Maa Inti Vanta - just for you*\n\n📅 *Delivery Date:*\n ${deliveryDay}` +
-    formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "06:00 AM", deliveryDay) +
+    formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "08:30 AM", deliveryDay) +
     formatEnglishSection("🍚", "Lunch", selected.lunch, "09:00 AM", deliveryDay) +
     formatEnglishSection("🌙", "Dinner", selected.dinner, "05:00 PM", deliveryDay) +
     `\n\n🚚 *Delivery Timings:*\n🌞Breakfast: 07:30 - 08:30 AM\n🍚Lunch: 12:30 - 01:30 PM\n🌙Dinner: 08:00 - 09:00 PM\n\n📦 *Delivery Charges:*\n3 KM – ₹30\n3 KM - 6 KM – ₹60\n\nThank You!`;
