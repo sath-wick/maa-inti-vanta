@@ -135,25 +135,29 @@ export default function MenuCreator() {
 
   const generateMessageAndSaveMenu = async () => {
   const deliveryDay = format(new Date(deliveryDate), "dd/MMMM/yyyy");
+  const orderByDay = format(
+  new Date(new Date(deliveryDate).setDate(new Date(deliveryDate).getDate() + 1)),
+  "dd/MMMM/yyyy"
+  )
 
   const teluguMealsMsg =
     `🍲 మా ఇంటి వంట మీకు!\n\n📅 డెలివరీ తేదీ:\n ${deliveryDay}` +
-    formatTeluguSection("🌞", "టిఫిన్", { breakfast: selected.breakfast }, "08:30 AM", deliveryDay) +
-    formatTeluguSection("🍚", "మధ్యాహ్న భోజనం", selected.lunch, "09:00 AM", deliveryDay) +
-    formatTeluguSection("🌙", "రాత్రి భోజనం", selected.dinner, "05:00 PM", deliveryDay) +
+    formatTeluguSection("🌞", "టిఫిన్", { breakfast: selected.breakfast }, "08:30 AM", orderByDay) +
+    formatTeluguSection("🍚", "మధ్యాహ్న భోజనం", selected.lunch, "09:00 AM", orderByDay) +
+    formatTeluguSection("🌙", "రాత్రి భోజనం", selected.dinner, "05:00 PM", orderByDay) +
     `\n\n🚚 డెలివరీ సమయాలు:\n🌞 టిఫిన్: 07:30 - 08:30 AM\n🍚 మధ్యాహ్న భోజనం: 12:30 - 01:30 PM\n🌙 రాత్రి భోజనం: 08:00 - 09:00 PM\n\n📦 డెలివరీ ఛార్జీలు:\n3 కి.మీ లోపు – ₹30\n3 కి.మీ - 6 కి.మీ – ₹60\n\nధన్యవాదాలు!`;
 
   const englishMealsMsg =
     `🍽️ *Maa Inti Vanta - just for you*\n\n📅 *Delivery Date:*\n ${deliveryDay}` +
-    formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "08:30 AM", deliveryDay) +
-    formatEnglishSection("🍚", "Lunch", selected.lunch, "09:00 AM", deliveryDay) +
-    formatEnglishSection("🌙", "Dinner", selected.dinner, "05:00 PM", deliveryDay) +
+    formatEnglishSection("🌞", "Breakfast", { breakfast: selected.breakfast }, "08:30 AM", orderByDay) +
+    formatEnglishSection("🍚", "Lunch", selected.lunch, "09:00 AM", orderByDay) +
+    formatEnglishSection("🌙", "Dinner", selected.dinner, "05:00 PM", orderByDay) +
     `\n\n🚚 *Delivery Timings:*\n🌞Breakfast: 07:30 - 08:30 AM\n🍚Lunch: 12:30 - 01:30 PM\n🌙Dinner: 08:00 - 09:00 PM\n\n📦 *Delivery Charges:*\n3 KM – ₹30\n3 KM - 6 KM – ₹60\n\nThank You!`;
-
+orderByDay
   const bakeryMsg =
     `🍽 Maa Inti Vanta - just for you\n📅 Delivery Date: ${deliveryDay}` +
-    formatEnglishSection("🍰", "Bakery", { bakery: selected.bakery }, "04:00 PM", deliveryDay) +
-    formatTeluguSection("🍰", "బేకరీ", { bakery: selected.bakery }, "04:00 PM", deliveryDay) +
+    formatEnglishSection("🍰", "Bakery", { bakery: selected.bakery }, "04:00 PM", orderByDay) +
+    formatTeluguSection("🍰", "బేకరీ", { bakery: selected.bakery }, "04:00 PM", orderByDay) +
     `\n🚚 Delivery Timings/డెలివరీ సమయాలు:\n🍰Bakery: 06:30 PM\n🍰 బేకరీ: 06:30 PM`;
 
   const customMenuItemsFiltered = customMenu.items.filter(
