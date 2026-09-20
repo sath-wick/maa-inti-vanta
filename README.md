@@ -1,12 +1,20 @@
-# React + Vite
+# Maa Inti Vanta Console
+A company-facing full-stack application made for a Cloud Kitchen.
+## Core Features
+- **Dynamic Menu & Inventory Management**:
+Operators can add, edit, and remove items from a centralized master inventory. The system dynamically generates specific daily menus (Breakfast, Lunch, Dinner) that are instantly formatted for easy copy-pasting into WhatsApp customer broadcast groups.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+- **Automated Billing & Order Processing**:
+Generates precise customer invoices on the fly by mapping orders directly to that specific day's active menu items.
 
-Currently, two official plugins are available:
+- **Customer & Revenue Management (CRM):**
+Maintains a secure database of customer records and tracks core operational revenue across different business days.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Secure Internal Access**:
+The entire platform is locked behind robust role-based authentication, ensuring data integrity and restricting access exclusively to authorized business operators.
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Backend & Database**: Express JS & Firebase (Authentication, Realtime Database / Cloud Firestore)
+- **Frontend**: React JS
+- **Architecture**: RESTful data flow, dynamic state management, and secure routing.

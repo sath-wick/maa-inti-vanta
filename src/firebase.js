@@ -1,23 +1,16 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import {
-  getDatabase,
-  ref,
-  get,
-  set
-} from "firebase/database";
+import { getDatabase, ref, get, set } from "firebase/database";
 import { getAuth } from "firebase/auth";
 
-
 const firebaseConfig = {
-  apiKey: "AIzaSyCbosze5GFJ5pP-z8wLLF3kZHv2hhGUrwM",
-  authDomain: "maa-test-vanta.firebaseapp.com",
-  projectId: "maa-test-vanta",
-  databaseURL: "https://maa-test-vanta-default-rtdb.asia-southeast1.firebasedatabase.app",
-  storageBucket: "maa-test-vanta.firebasestorage.app",
-  messagingSenderId: "594416921915",
-  appId: "1:594416921915:web:fb77c8dce0faa8b65a5b1e",
-  measurementId: "G-12JBTTQ5CW"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
